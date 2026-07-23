@@ -11,7 +11,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
-import eu.kanade.tachiyomi.lib.voe.VoeExtractor
+import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -258,11 +258,11 @@ class VoirAnime : ParsedAnimeHttpSource() {
                         videos.addAll(extracted)
                     }
                     iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) -> {
-                        val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
+                        val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ", headers = headers)
                         videos.addAll(extracted)
                     }
                     iframeSrc.contains("vidmoly", ignoreCase = true) -> {
-                        // Ignoré
+                        // Vidmoly is intentionally ignored as per previous logic
                     }
                 }
             } catch (e: Exception) {
