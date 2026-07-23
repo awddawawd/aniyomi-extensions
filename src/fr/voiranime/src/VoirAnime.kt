@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.lib.streamtape.StreamtapeExtractor
 import eu.kanade.tachiyomi.lib.voe.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -55,7 +56,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         GenreFilter(genres)
     )
 
-    // ============================== POPULAR ==============================
+    // ============================== POPULAR (with genre support) ==============================
 
     override fun popularAnimeRequest(page: Int): Request = popularAnimeRequest(page, getFilterList())
 
@@ -119,7 +120,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== SEARCH ==============================
+    // ============================== SEARCH (VF filter) ==============================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (page > 1) throw Exception("No more pages")
@@ -223,10 +224,9 @@ class VoirAnime : ParsedAnimeHttpSource() {
     // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> {
-        val document = response.asJsoup()
+        val document = response.asJsoup()  // requires import eu.kanade.tachiyomi.network.asJsoup
         val videos = mutableListOf<Video>()
 
-        // Find all iframes that belong to known players
         val iframes = document.select("iframe")
         for (iframe in iframes) {
             val src = iframe.attr("data-src").ifEmpty { iframe.attr("src") }
@@ -236,17 +236,15 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 src.contains("voe.sx") -> "VOE"
                 src.contains("filemoon.sx") -> "MOON"
                 src.contains("streamtape.com") -> "Stape"
-                // TODO: add myTV host detection here, e.g. src.contains("mytv.to")
-                else -> continue // skip unknown players
+                // TODO: add myTV host here, e.g. src.contains("mytv.to") -> "myTV"
+                else -> continue
             }
             videos.add(Video(src, "$name - VoirAnime", src))
         }
-
         return videos
     }
 
     override fun videoUrlParse(document: Document): String {
-        // document is the iframe page (since videoListParse returned the iframe URL as the video.url)
         val url = document.location()
         return try {
             when {
@@ -259,7 +257,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 url.contains("streamtape.com") -> {
                     StreamtapeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
                 }
-                // TODO: add myTV extractor branch
+                // TODO: add myTV extractor here
                 else -> ""
             }
         } catch (e: Exception) {
