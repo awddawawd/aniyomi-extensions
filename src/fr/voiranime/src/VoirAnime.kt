@@ -217,34 +217,49 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ============================ VIDEO LINKS ============================
+    /// ============================ VIDEO LINKS ============================
 
-    override fun videoListParse(response: Response): List<Video> {
-        val document = Jsoup.parse(response.body!!.string(), response.request.url.toString())
-        val videos = mutableListOf<Video>()
+override fun videoListParse(response: Response): List<Video> {
+    val body = response.body!!.string()
+    val document = Jsoup.parse(body, response.request.url.toString())
 
-        // Locate the script containing the thisChapterSources object
-        val script = document.select("script").find {
-            it.data().contains("thisChapterSources")
-        } ?: return videos
-
-        val scriptText = script.data()
-
-        // Extract all player entries using regex
-        val pattern = """"(LECTEUR [^"]+)"\s*:\s*"<iframe[^>]+src=\\"([^"]+)\\"""".toRegex()
-        val matches = pattern.findAll(scriptText)
-
-        for (match in matches) {
-            val fullName = match.groupValues[1]    // e.g. "LECTEUR myTV"
-            val iframeSrc = match.groupValues[2]   // e.g. "https://vidmoly.biz/embed-mtjbfeu8h5yj.html"
-            val shortName = fullName.removePrefix("LECTEUR ").trim()
-            videos.add(Video(iframeSrc, "$shortName - VoirAnime", iframeSrc))
-        }
-
-        return videos
+    // Locate the script containing the thisChapterSources object
+    val scriptElement = document.select("script").firstOrNull {
+        it.data().contains("thisChapterSources")
+    }
+    if (scriptElement == null) {
+        // Dump a snippet of the page to help debug
+        val snippet = body.take(2000)
+        throw Exception("DEBUG: No script with 'thisChapterSources' found. Page snippet:\n$snippet")
     }
 
-    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+    val scriptText = scriptElement.data()
+
+    // Extract all player entries using regex
+    val pattern = """"(LECTEUR [^"]+)"\s*:\s*"<iframe[^>]+src=\\"([^"]+)\\"""".toRegex()
+    val matches = pattern.findAll(scriptText).toList()
+
+    if (matches.isEmpty()) {
+        // Print the script text (or a part of it) so we can see what went wrong
+        val scriptSnippet = scriptText.take(1500)
+        throw Exception("DEBUG: No matches found for regex. Script content:\n$scriptSnippet")
+    }
+
+    val videos = mutableListOf<Video>()
+    for (match in matches) {
+        val fullName = match.groupValues[1]    // e.g. "LECTEUR myTV"
+        val iframeSrc = match.groupValues[2]   // e.g. "https://vidmoly.biz/embed-mtjbfeu8h5yj.html"
+        val shortName = fullName.removePrefix("LECTEUR ").trim()
+        videos.add(Video(iframeSrc, "$shortName - VoirAnime", iframeSrc))
+    }
+
+    if (videos.isEmpty()) {
+        throw Exception("DEBUG: Regex matched but no videos created (should not happen). Matches: ${matches.size}")
+    }
+
+    return videos
 }
+
+override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+override fun videoListSelector(): String = throw UnsupportedOperationException()
+override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
