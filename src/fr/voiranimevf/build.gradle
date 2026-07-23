@@ -1,6 +1,6 @@
 ext {
-    extName = 'VoirAnime'
-    extClass = '.VoirAnime'
+    extName = 'VoirAnimeVF'
+    extClass = '.VoirAnimeVF'
     extVersionCode = 1
     isNsfw = false
 }
