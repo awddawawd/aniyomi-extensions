@@ -55,7 +55,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         GenreFilter(genres)
     )
 
-    // ============================== POPULAR (with genre support) ==============================
+    // ============================== POPULAR ==============================
 
     override fun popularAnimeRequest(page: Int): Request = popularAnimeRequest(page, getFilterList())
 
@@ -119,7 +119,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== SEARCH (VF filter) ==============================
+    // ============================== SEARCH ==============================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (page > 1) throw Exception("No more pages")
@@ -222,31 +222,11 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================ VIDEO LINKS ============================
 
-    // Standard video methods are overridden by fetchVideoList. They are not used.
-    override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
-    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun videoListParse(response: Response): List<Video> {
+        val document = response.asJsoup()
+        val videos = mutableListOf<Video>()
 
-    // We fetch video list by overriding fetchVideoList
-    override fun fetchVideoList(episode: SEpisode): Observable<List<Video>> {
-        val episodeUrl = episode.url
-        val request = GET(episodeUrl, headers)
-        return client.newCall(request).asObservable().map { response ->
-            val document = response.asJsoup()
-            val videoCandidates = extractVideoCandidates(document)
-            videoCandidates.map { candidate ->
-                val directUrl = extractVideoUrl(candidate)
-                Video(directUrl, candidate.name, directUrl)
-            }
-        }
-    }
-
-    private data class VideoCandidate(val url: String, val name: String)
-
-    private fun extractVideoCandidates(document: Document): List<VideoCandidate> {
-        val candidates = mutableListOf<VideoCandidate>()
-        // Search for iframes that belong to known players
+        // Find all iframes that belong to known players
         val iframes = document.select("iframe")
         for (iframe in iframes) {
             val src = iframe.attr("data-src").ifEmpty { iframe.attr("src") }
@@ -256,30 +236,30 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 src.contains("voe.sx") -> "VOE"
                 src.contains("filemoon.sx") -> "MOON"
                 src.contains("streamtape.com") -> "Stape"
-                // TODO: add myTV detection here, e.g. src.contains("mytv.to")
-                else -> continue // unknown, skip
+                // TODO: add myTV host detection here, e.g. src.contains("mytv.to")
+                else -> continue // skip unknown players
             }
-            candidates.add(VideoCandidate(src, name))
+            videos.add(Video(src, "$name - VoirAnime", src))
         }
-        return candidates
+
+        return videos
     }
 
-    private fun extractVideoUrl(candidate: VideoCandidate): String {
+    override fun videoUrlParse(document: Document): String {
+        // document is the iframe page (since videoListParse returned the iframe URL as the video.url)
+        val url = document.location()
         return try {
-            when (candidate.name) {
-                "VOE" -> {
-                    val extractor = VoeExtractor(client)
-                    extractor.videosFromUrl(candidate.url).firstOrNull()?.videoUrl ?: ""
+            when {
+                url.contains("voe.sx") -> {
+                    VoeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
                 }
-                "MOON" -> {
-                    val extractor = FilemoonExtractor(client)
-                    extractor.videosFromUrl(candidate.url).firstOrNull()?.videoUrl ?: ""
+                url.contains("filemoon.sx") -> {
+                    FilemoonExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
                 }
-                "Stape" -> {
-                    val extractor = StreamtapeExtractor(client)
-                    extractor.videosFromUrl(candidate.url).firstOrNull()?.videoUrl ?: ""
+                url.contains("streamtape.com") -> {
+                    StreamtapeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
                 }
-                // TODO: add myTV extractor here
+                // TODO: add myTV extractor branch
                 else -> ""
             }
         } catch (e: Exception) {
@@ -287,4 +267,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
             ""
         }
     }
+
+    override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException("Not used")
 }
