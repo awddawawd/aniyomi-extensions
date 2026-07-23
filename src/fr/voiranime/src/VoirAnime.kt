@@ -40,6 +40,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
 
     // 4. Extracting the details 
+    // 4. Extracting the details 
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
@@ -50,7 +51,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
             anime.title = titleElement.text()
             anime.setUrlWithoutDomain(titleElement.attr("href"))
         } else {
-            // Fallback: Just grab the first link we see in the container if the heading is missing
             val fallbackLink = element.select("a").first()
             if (fallbackLink != null) {
                 anime.title = fallbackLink.attr("title").ifEmpty { fallbackLink.text() }
@@ -59,13 +59,12 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
 
         // --- Thumbnail ---
-        // We specifically target the 'item-thumb' div to guarantee we get the poster
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
-            // The HTML shows the image is simply in the 'src' attribute. 
-            // We remove the '-110x150' thumbnail sizing to try and force the site to give us the high-res poster!
-            val rawSrc = imgElement.attr("src")
-            anime.thumbnail_url = rawSrc.replace("-110x150", "") 
+            // Safely grab the image without modifying the URL
+            anime.thumbnail_url = imgElement.absUrl("data-src").ifEmpty {
+                imgElement.absUrl("src")
+            }
         }
         
         return anime
