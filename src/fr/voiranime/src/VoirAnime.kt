@@ -63,4 +63,8 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================ Video Links (Ignored) =============================
     override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
+    override fun videoListSelector(): String = throw UnsupportedOperationException()
+    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+    override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+
 }
