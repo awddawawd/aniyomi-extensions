@@ -155,7 +155,12 @@ class VoirAnime : ParsedAnimeHttpSource() {
         // Status
         status = parseStatus(document.select(".post-content_item .summary-content").text())
 
-        // Thumbnail (if available on details page)
+        // Studio (remplace la case auteur par le nom du studio)
+        author = document.select(".post-content_item:has(.summary-heading h5:contains(\"Studio\")) .summary-content").text().ifEmpty {
+            document.select(".post-content_item .summary-content:contains(\"Studio\")").text()
+        }
+
+        // Thumbnail (si disponible sur la page de détails)
         val img = document.select("div.summary_image img").first()
         if (img != null) {
             thumbnail_url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
@@ -186,8 +191,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
     }
 
     private fun parseEpisodeDate(date: String?): Long {
-        // If date text is relative (e.g., "20 minutes ago"), fallback to current time
-        // Otherwise, add a basic parser if they use formatted dates like "July 16, 2026"
         return if (date.isNullOrBlank()) {
             System.currentTimeMillis()
         } else {
