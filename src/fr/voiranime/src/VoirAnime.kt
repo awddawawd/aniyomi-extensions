@@ -15,6 +15,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // --- Core Source Info ---
     override val name = "VoirAnime"
+    // Keep the baseUrl completely clean without parameters or trailing slashes
     override val baseUrl = "https://voir-anime.to" 
     override val lang = "fr"
     override val supportsLatest = false
@@ -23,7 +24,13 @@ class VoirAnime : ParsedAnimeHttpSource() {
     
     // 1. The URL we want to scrape for the homepage
     override fun popularAnimeRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page", headers)
+        // We inject the ?filter=subbed here so pagination works perfectly
+        val url = if (page == 1) {
+            "$baseUrl/?filter=subbed"
+        } else {
+            "$baseUrl/page/$page/?filter=subbed"
+        }
+        return GET(url, headers)
     }
 
     // 2. The CSS selector for the repeating box that holds ONE anime
@@ -36,7 +43,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
-        // Title and URL
+        // --- Title and URL ---
         val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
         
         if (titleElement != null) {
@@ -51,12 +58,15 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // Thumbnail (checking for lazy-loading tags first)
+        // --- Thumbnail (Upgraded Extraction) ---
         val imgElement = element.select("img").first()
         if (imgElement != null) {
+            // Check all common lazy-load attributes, falling back to absolute URL parsing
             anime.thumbnail_url = imgElement.attr("data-src").ifEmpty {
                 imgElement.attr("data-lazy-src").ifEmpty {
-                    imgElement.attr("src")
+                    imgElement.attr("data-original").ifEmpty {
+                        imgElement.absUrl("src") // absUrl automatically fixes missing domains!
+                    }
                 }
             }
         }
