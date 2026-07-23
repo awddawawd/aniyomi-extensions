@@ -6,3 +6,11 @@ ext {
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    // Ne touche pas aux autres dépendances s'il y en a (comme jsoup, etc.)
+    
+    implementation(project(":lib-filemoon"))
+    implementation(project(":lib-streamtape"))
+    implementation(project(":lib-voe"))
+}
