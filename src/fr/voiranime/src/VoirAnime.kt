@@ -82,8 +82,8 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================== Search ===============================
     
+        // 1. Building the POST request with the hidden Form Data
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
-        // Dropdown live searches usually don't have pages. If Aniyomi asks for page 2, we just stop.
         if (page > 1) throw Exception("No more pages")
         
         val formBody = FormBody.Builder()
@@ -91,7 +91,8 @@ class VoirAnime : ParsedAnimeHttpSource() {
             .add("aspp", query) 
             .add("asid", "3")
             .add("asp_inst_id", "3_1")
-            .add("options", "aspf%5Bvf_1%5D%3Dvf%26asp_gen%5B%5D%3Dexcerpt%26asp_gen%5B%5D%3Dcontent%26asp_gen%5B%5D%3Dtitle%26filters_initial%3D1%26filters_changed%3D0%26qtranslate_lang%3D0%26current_page_id%3D15")
+            // Use addEncoded so OkHttp doesn't double-encode the string!
+            .addEncoded("options", "aspf%5Bvf_1%5D%3Dvf%26asp_gen%5B%5D%3Dexcerpt%26asp_gen%5B%5D%3Dcontent%26asp_gen%5B%5D%3Dtitle%26filters_initial%3D1%26filters_changed%3D0%26qtranslate_lang%3D0%26current_page_id%3D15")
             .build()
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
