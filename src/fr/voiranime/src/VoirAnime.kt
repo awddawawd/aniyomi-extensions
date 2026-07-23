@@ -43,6 +43,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
 
+        // 4. Extracting the details 
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
@@ -60,16 +61,21 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // --- Thumbnail ---
+        // --- High-Quality Thumbnail ---
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
-            anime.thumbnail_url = imgElement.absUrl("data-src").ifEmpty {
+            val rawUrl = imgElement.absUrl("data-src").ifEmpty {
                 imgElement.absUrl("src")
             }
+            
+            // Regex to find and remove any WordPress dimension suffixes (e.g., "-110x150") 
+            // before the file extension, forcing the server to load the original high-res file!
+            anime.thumbnail_url = rawUrl.replace(Regex("-\\d+x\\d+"), "")
         }
         
         return anime
     }
+
 
     // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
