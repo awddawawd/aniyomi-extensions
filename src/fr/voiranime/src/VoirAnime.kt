@@ -9,6 +9,9 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
+import eu.kanade.tachiyomi.lib.voe.VoeExtractor
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -217,7 +220,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ==    // ============================ VIDEO LINKS (AFFICHEUR DE LIENS V2) ============================
+    // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
@@ -225,40 +228,52 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val document = Jsoup.parse(body, response.request.url.toString())
         val scriptElement = document.select("script").firstOrNull {
             it.data().contains("thisChapterSources")
-        } ?: return listOf(Video("http://fake.com/1.mp4", "ERREUR: Pas de script", "http://fake.com/1.mp4"))
+        } ?: return emptyList()
 
         val scriptText = scriptElement.data()
 
-        // Regex mis à jour : On autorise la capture des antislashs dans l'URL !
         val pattern = """"([^"]*LECTEUR[^"]*)"\s*:\s*"<iframe[^>]+src=\\?["']([^"']+)""".toRegex(RegexOption.IGNORE_CASE)
         val matches = pattern.findAll(scriptText).toList()
-
-        if (matches.isEmpty()) {
-            return listOf(Video("http://fake.com/1.mp4", "ERREUR: Regex échoue encore", "http://fake.com/1.mp4"))
-        }
 
         val videos = mutableListOf<Video>()
 
         for (match in matches) {
             val fullName = match.groupValues[1].trim()
-            
-            // On nettoie les antislashs échappés (\/) pour avoir une vraie URL
-            var iframeSrc = match.groupValues[2].replace("\\/", "/")
+            var iframeSrc = match.groupValues[2].replace("\\/", "/").removeSuffix("\\").trim()
 
             if (iframeSrc.startsWith("//")) {
                 iframeSrc = "https:$iframeSrc"
             }
 
-            val debugTitle = "$fullName -> $iframeSrc"
+            val shortName = fullName.replace("LECTEUR", "", ignoreCase = true).trim()
 
-            // On affiche le résultat !
-            videos.add(Video("http://fake.com/video.mp4", debugTitle, "http://fake.com/video.mp4"))
+            try {
+                when {
+                    iframeSrc.contains("voe", ignoreCase = true) -> {
+                        val extracted = VoeExtractor(client).videosFromUrl(iframeSrc)
+                        videos.addAll(extracted)
+                    }
+                    iframeSrc.contains("streamtape", ignoreCase = true) || iframeSrc.contains("stape", ignoreCase = true) -> {
+                        val extracted = StreamTapeExtractor(client).videosFromUrl(iframeSrc)
+                        videos.addAll(extracted)
+                    }
+                    iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) -> {
+                        val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
+                        videos.addAll(extracted)
+                    }
+                    iframeSrc.contains("vidmoly", ignoreCase = true) -> {
+                        // Ignoré
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore silently and continue to the next extractor
+            }
         }
 
         return videos
     }
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
-    override fun videoListSelector(): String = throw UnsupportedOperationException()
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
+    override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException("Not used")
 }
