@@ -220,7 +220,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ====    // ============================ VIDEO LINKS ============================
+    // ==    // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
@@ -280,20 +280,20 @@ class VoirAnime : ParsedAnimeHttpSource() {
                         videos.add(Video(dummyUrl, "$shortName - Ignoré (Pas de librairie Vidmoly)", dummyUrl))
                     }
                     else -> {
-                        // Si le site a ajouté un nouveau lecteur qu'on ne connaît pas encore
                         videos.add(Video(dummyUrl, "$shortName - Lecteur inconnu/Non supporté", dummyUrl))
                     }
                 }
             } catch (e: Exception) {
-                // Si l'extracteur plante (ex: protection Cloudflare, changement d'API du lecteur)
                 val errorMsg = e.message?.take(30) ?: "Erreur inconnue"
                 videos.add(Video(dummyUrl, "$shortName - Erreur: $errorMsg", dummyUrl))
             }
         }
 
-        return videos
+        // --- TRI INTELLIGENT ---
+        // Place les vraies vidéos en premier (celles qui n'ont pas l'URL "fake.com")
+        // Repousse tous les statuts d'erreur / ignorés à la fin du menu de qualités.
+        return videos.sortedByDescending { !it.url.contains("fake.com") }
     }
-
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
     override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
