@@ -31,9 +31,9 @@ class VoirAnime : ParsedAnimeHttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    // ==================== GENRE FILTER (Dropdown) ====================
+    // ==================== GENRE FILTER ====================
 
-    private val GENRES by lazy {
+    private val genres by lazy {
         listOf(
             "Comedy" to 2940, "Action" to 2746, "Fantasy" to 2001, "Drama" to 1878,
             "Adventure" to 1642, "Romance" to 1624, "Sci-Fi" to 1277, "Slice of Life" to 1219,
@@ -43,13 +43,13 @@ class VoirAnime : ParsedAnimeHttpSource() {
         ).sortedByDescending { it.second }.map { it.first }
     }
 
-    private class GenreFilter : AnimeFilter.Select<String>(
-        "Genre", GENRES.toTypedArray()
+    private class GenreFilter(genres: List<String>) : AnimeFilter.Select<String>(
+        "Genre", genres.toTypedArray()
     )
 
     override fun getFilterList(): AnimeFilterList = AnimeFilterList(
         AnimeFilter.Header("Choisissez un genre (du plus populaire au moins populaire)"),
-        GenreFilter()
+        GenreFilter(genres)
     )
 
     // ============================== POPULAR (with genre support) ==============================
@@ -59,7 +59,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     private fun popularAnimeRequest(page: Int, filterList: AnimeFilterList): Request {
         val genreFilter = filterList.find { it is GenreFilter } as? GenreFilter
         val selectedGenre = genreFilter?.state?.let { idx ->
-            if (idx in GENRES.indices) GENRES[idx] else null
+            if (idx in genres.indices) genres[idx] else null
         }
 
         val url = if (selectedGenre != null) {
