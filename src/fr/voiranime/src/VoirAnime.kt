@@ -7,12 +7,8 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
-import eu.kanade.tachiyomi.lib.voe.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -221,10 +217,10 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ============================ VIDEO LINKS ============================
+    // ============================ VIDEO LINKS (self‑contained) ============================
 
     override fun videoListParse(response: Response): List<Video> {
-        val document = response.asJsoup()
+        val document = Jsoup.parse(response.body?.string() ?: "", response.request.url.toString())
         val videos = mutableListOf<Video>()
 
         val iframes = document.select("iframe")
@@ -236,7 +232,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 src.contains("voe.sx") -> "VOE"
                 src.contains("filemoon.sx") -> "MOON"
                 src.contains("streamtape.com") -> "Stape"
-                // TODO: add myTV detection
+                // TODO: add myTV host detection here
                 else -> continue
             }
             videos.add(Video(src, "$name - VoirAnime", src))
@@ -248,21 +244,69 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val url = document.location()
         return try {
             when {
-                url.contains("voe.sx") -> {
-                    VoeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
-                }
-                url.contains("filemoon.sx") -> {
-                    FilemoonExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
-                }
-                url.contains("streamtape.com") -> {
-                    StreamTapeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
-                }
+                url.contains("voe.sx") -> extractVoe(url)
+                url.contains("filemoon.sx") -> extractFilemoon(url)
+                url.contains("streamtape.com") -> extractStreamtape(url)
                 else -> ""
             }
         } catch (e: Exception) {
             e.printStackTrace()
             ""
         }
+    }
+
+    // ---------- Inline extractors ----------
+
+    private fun extractVoe(url: String): String {
+        val request = GET(url, headers)
+        val response = client.newCall(request).execute()
+        val body = response.body?.string() ?: return ""
+        // VOE often has a script containing "prompt":"https://...mp4"
+        val regex = """"prompt"\s*:\s*"(https:[^"]+\.mp4)"""".toRegex()
+        val match = regex.find(body) ?: return ""
+        return match.groupValues[1]
+    }
+
+    private fun extractFilemoon(url: String): String {
+        // Filemoon sometimes embeds a second iframe; we fetch it
+        val request = GET(url, headers)
+        val response = client.newCall(request).execute()
+        val body = response.body?.string() ?: return ""
+        val doc = Jsoup.parse(body)
+        val iframe = doc.selectFirst("iframe") ?: return ""
+        val subUrl = iframe.attr("src").ifBlank { return "" }
+
+        val subRequest = GET(subUrl, headers)
+        val subResponse = client.newCall(subRequest).execute()
+        val subBody = subResponse.body?.string() ?: return ""
+        // Extract mp4 from script: file:"https://....mp4"
+        val regex = """file\s*:\s*"(https:[^"]+\.mp4)"""".toRegex()
+        val match = regex.find(subBody) ?: return ""
+        return match.groupValues[1]
+    }
+
+    private fun extractStreamtape(url: String): String {
+        // Streamtape needs a token from the page
+        val getRequest = GET(url, headersBuilder().add("Referer", url).build())
+        val getResponse = client.newCall(getRequest).execute()
+        val doc = Jsoup.parse(getResponse.body?.string() ?: "", getRequest.url.toString())
+        val token = doc.select("div#robotlink").text()
+        if (token.isBlank()) return ""
+
+        val postUrl = "https://streamtape.com/get_video"
+        val formBody = FormBody.Builder()
+            .add("token", token)
+            .build()
+        val postRequest = Request.Builder()
+            .url(postUrl)
+            .headers(headersBuilder().add("Referer", url).build())
+            .post(formBody)
+            .build()
+        val postResponse = client.newCall(postRequest).execute()
+        val json = postResponse.body?.string() ?: return ""
+        val videoRegex = """"videolink"\s*:\s*"(https:[^"]+)"""".toRegex()
+        val videoMatch = videoRegex.find(json) ?: return ""
+        return videoMatch.groupValues[1]
     }
 
     override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
