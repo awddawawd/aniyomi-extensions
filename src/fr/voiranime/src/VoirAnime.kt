@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
-import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -17,30 +15,54 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // --- Core Source Info ---
     override val name = "VoirAnime"
-    override val baseUrl = "https://voir-anime.to"
+    override val baseUrl = "https://voir-anime.to" 
     override val lang = "fr"
     override val supportsLatest = false
 
     // ============================== Popular (Homepage) ===============================
-
+    
+    // 1. The URL we want to scrape for the homepage
     override fun popularAnimeRequest(page: Int): Request {
-        // Requesting the base URL so we can see what the homepage HTML looks like
-        return GET(baseUrl, headers)
+        return GET("$baseUrl/page/$page", headers)
     }
 
-    // Intercept the response BEFORE the app tries to look for CSS selectors
-    override fun popularAnimeParse(response: Response): AnimesPage {
-        val document = response.asJsoup()
+    // 2. The CSS selector for the repeating box that holds ONE anime
+    override fun popularAnimeSelector(): String = ".page-item-detail"
 
-        // Grab the first 1500 characters of the HTML to fit on your phone screen.
-        // Throwing it as an Exception forces the app to display it as an error message!
-        throw Exception("HTML RECEIVED:\n\n" + document.html().take(1500))
+    // 3. The CSS selector for the "Next Page" button
+    override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
+
+    // 4. Extracting the details 
+    override fun popularAnimeFromElement(element: Element): SAnime {
+        val anime = SAnime.create()
+        
+        // Title and URL
+        val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
+        
+        if (titleElement != null) {
+            anime.title = titleElement.text()
+            anime.setUrlWithoutDomain(titleElement.attr("href"))
+        } else {
+            // Fallback: Just grab the first link we see in the container if the heading is missing
+            val fallbackLink = element.select("a").first()
+            if (fallbackLink != null) {
+                anime.title = fallbackLink.attr("title").ifEmpty { fallbackLink.text() }
+                anime.setUrlWithoutDomain(fallbackLink.attr("href"))
+            }
+        }
+
+        // Thumbnail (checking for lazy-loading tags first)
+        val imgElement = element.select("img").first()
+        if (imgElement != null) {
+            anime.thumbnail_url = imgElement.attr("data-src").ifEmpty {
+                imgElement.attr("data-lazy-src").ifEmpty {
+                    imgElement.attr("src")
+                }
+            }
+        }
+        
+        return anime
     }
-
-    // These are required by the compiler, but will never be reached because we throw an Exception above.
-    override fun popularAnimeSelector(): String = ""
-    override fun popularAnimeNextPageSelector(): String? = null
-    override fun popularAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
     // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -66,5 +88,4 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun videoListSelector(): String = throw UnsupportedOperationException()
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
-
 }
