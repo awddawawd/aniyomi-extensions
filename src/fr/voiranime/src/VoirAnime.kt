@@ -17,12 +17,12 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // --- Core Source Info ---
     override val name = "VoirAnime"
-    override val baseUrl = "https://voir-anime.to" 
+    override val baseUrl = "https://voir-anime.to"
     override val lang = "fr"
     override val supportsLatest = false
 
     // ============================== Popular (Homepage) ===============================
-    
+
     override fun popularAnimeRequest(page: Int): Request {
         // Requesting the base URL so we can see what the homepage HTML looks like
         return GET(baseUrl, headers)
@@ -31,7 +31,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     // Intercept the response BEFORE the app tries to look for CSS selectors
     override fun popularAnimeParse(response: Response): AnimesPage {
         val document = response.asJsoup()
-        
+
         // Grab the first 1500 characters of the HTML to fit on your phone screen.
         // Throwing it as an Exception forces the app to display it as an error message!
         throw Exception("HTML RECEIVED:\n\n" + document.html().take(1500))
