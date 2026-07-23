@@ -145,7 +145,47 @@ class VoirAnime : ParsedAnimeHttpSource() {
     // =========================== Anime Details ===========================
     
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
-        // Description
+        // ===== DEBUG SECTION - All post-content items =====
+        val allPostItems = document.select(".post-content_item")
+        val debugItems = StringBuilder("=== ALL POST CONTENT ITEMS ===\n")
+        allPostItems.forEachIndexed { index, item ->
+            val heading = item.select(".summary-heading").text().trim()
+            val content = item.select(".summary-content").text().trim()
+            val headingHTML = item.select(".summary-heading").outerHtml()
+            debugItems.append("Item $index: Heading='$heading' | Content='$content' | HeadingHTML: $headingHTML\n")
+        }
+        throw Exception("DEBUG: Post content items:\n$debugItems")
+        
+        // ===== DEBUG SECTION - Looking for Studio specifically =====
+        // Check if any heading contains "Studio" (case insensitive)
+        val studioItems = document.select(".post-content_item").filter { item ->
+            item.select(".summary-heading").text().contains("Studio", ignoreCase = true)
+        }
+        if (studioItems.isNotEmpty()) {
+            val studioDebug = StringBuilder("=== STUDIO ITEMS FOUND ===\n")
+            studioItems.forEachIndexed { index, item ->
+                val heading = item.select(".summary-heading").text().trim()
+                val content = item.select(".summary-content").text().trim()
+                val itemHTML = item.outerHtml()
+                studioDebug.append("Studio Item $index: Heading='$heading' | Content='$content'\n")
+                studioDebug.append("HTML: ${itemHTML.take(500)}\n")
+            }
+            throw Exception("DEBUG: Studio items:\n$studioDebug")
+        } else {
+            // Let's check if there are any items at all, or if the structure is different
+            val allHeadings = document.select(".summary-heading").text()
+            val allContents = document.select(".summary-content").text()
+            throw Exception(
+                "DEBUG: No studio items found!\n" +
+                "All headings text: $allHeadings\n" +
+                "All contents text: $allContents\n" +
+                "Document title: ${document.title()}\n" +
+                "Body snippet: ${document.body()?.text()?.take(1000)}"
+            )
+        }
+
+        // Description - commented out for debugging
+        /*
         description = document.select(".description-summary .summary__content p").text()
 
         // Genres
@@ -165,6 +205,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         if (img != null) {
             thumbnail_url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
+        */
     }
 
     private fun parseStatus(statusStr: String): Int {
