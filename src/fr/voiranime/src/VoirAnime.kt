@@ -220,7 +220,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ============================ VIDEO LINKS ============================
+    // ====    // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
@@ -246,32 +246,54 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
 
             val shortName = fullName.replace("LECTEUR", "", ignoreCase = true).trim()
+            
+            // Fausse URL utilisée pour afficher les statuts sans faire crasher l'application
+            val dummyUrl = "http://fake.com/video.mp4"
 
             try {
                 when {
                     iframeSrc.contains("voe", ignoreCase = true) -> {
                         val extracted = VoeExtractor(client).videosFromUrl(iframeSrc)
-                        videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(Video(dummyUrl, "$shortName - Aucun lien trouvé (Fichier supprimé ?)", dummyUrl))
+                        } else {
+                            videos.addAll(extracted)
+                        }
                     }
                     iframeSrc.contains("streamtape", ignoreCase = true) || iframeSrc.contains("stape", ignoreCase = true) -> {
                         val extracted = StreamTapeExtractor(client).videosFromUrl(iframeSrc)
-                        videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(Video(dummyUrl, "$shortName - Aucun lien trouvé", dummyUrl))
+                        } else {
+                            videos.addAll(extracted)
+                        }
                     }
                     iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) -> {
                         val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ", headers = headers)
-                        videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(Video(dummyUrl, "$shortName - Aucun lien trouvé", dummyUrl))
+                        } else {
+                            videos.addAll(extracted)
+                        }
                     }
                     iframeSrc.contains("vidmoly", ignoreCase = true) -> {
-                        // Vidmoly is intentionally ignored as per previous logic
+                        videos.add(Video(dummyUrl, "$shortName - Ignoré (Pas de librairie Vidmoly)", dummyUrl))
+                    }
+                    else -> {
+                        // Si le site a ajouté un nouveau lecteur qu'on ne connaît pas encore
+                        videos.add(Video(dummyUrl, "$shortName - Lecteur inconnu/Non supporté", dummyUrl))
                     }
                 }
             } catch (e: Exception) {
-                // Ignore silently and continue to the next extractor
+                // Si l'extracteur plante (ex: protection Cloudflare, changement d'API du lecteur)
+                val errorMsg = e.message?.take(30) ?: "Erreur inconnue"
+                videos.add(Video(dummyUrl, "$shortName - Erreur: $errorMsg", dummyUrl))
             }
         }
 
         return videos
     }
+
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
     override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
