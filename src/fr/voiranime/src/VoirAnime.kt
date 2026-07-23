@@ -217,7 +217,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ===    // ============================ VIDEO LINKS (DUMP DU JAVASCRIPT) ============================
+    // ==    // ============================ VIDEO LINKS (AFFICHEUR DE LIENS V2) ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
@@ -228,32 +228,35 @@ class VoirAnime : ParsedAnimeHttpSource() {
         } ?: return listOf(Video("http://fake.com/1.mp4", "ERREUR: Pas de script", "http://fake.com/1.mp4"))
 
         val scriptText = scriptElement.data()
-        
-        // On trouve où commence le mot "thisChapterSources"
-        val startIndex = scriptText.indexOf("thisChapterSources")
-        
-        // On prend les 250 premiers caractères juste après (pour voir la structure)
-        // On enlève les sauts de ligne pour que l'affichage soit propre
-        val snippet = scriptText.substring(startIndex).take(250).replace("\n", " ").replace("\r", " ")
-        
-        // On coupe le texte en morceaux de 45 caractères pour que ça tienne sur ton écran de téléphone !
-        val chunks = snippet.chunked(45)
-        
-        val videos = chunks.mapIndexed { index, text ->
-            // On met le bout de code directement dans le nom de la vidéo
-            Video("http://fake.com/$index.mp4", "Ligne $index: $text", "http://fake.com/$index.mp4")
+
+        // Regex mis à jour : On autorise la capture des antislashs dans l'URL !
+        val pattern = """"([^"]*LECTEUR[^"]*)"\s*:\s*"<iframe[^>]+src=\\?["']([^"']+)""".toRegex(RegexOption.IGNORE_CASE)
+        val matches = pattern.findAll(scriptText).toList()
+
+        if (matches.isEmpty()) {
+            return listOf(Video("http://fake.com/1.mp4", "ERREUR: Regex échoue encore", "http://fake.com/1.mp4"))
         }
 
-        // Si par hasard la liste est vide (ne devrait pas arriver)
-        if (videos.isEmpty()) {
-            return listOf(Video("http://fake.com/1.mp4", "ERREUR: Snippet vide", "http://fake.com/1.mp4"))
+        val videos = mutableListOf<Video>()
+
+        for (match in matches) {
+            val fullName = match.groupValues[1].trim()
+            
+            // On nettoie les antislashs échappés (\/) pour avoir une vraie URL
+            var iframeSrc = match.groupValues[2].replace("\\/", "/")
+
+            if (iframeSrc.startsWith("//")) {
+                iframeSrc = "https:$iframeSrc"
+            }
+
+            val debugTitle = "$fullName -> $iframeSrc"
+
+            // On affiche le résultat !
+            videos.add(Video("http://fake.com/video.mp4", debugTitle, "http://fake.com/video.mp4"))
         }
 
         return videos
     }
-
-
-
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
     override fun videoListSelector(): String = throw UnsupportedOperationException()
