@@ -1,15 +1,15 @@
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
+import eu.kanade.tachiyomi.animesource.AnimeSource
+import eu.kanade.tachiyomi.animesource.AnimeSourceFactory
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
-import eu.kanade.tachiyomi.animesource.model.Genre
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import io.reactivex.Observable
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -20,10 +20,36 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class VoirAnime : ParsedAnimeHttpSource() {
+class VoirAnimeFactory : AnimeSourceFactory {
+    override fun createSources(): List<AnimeSource> {
+        val genres = listOf(
+            "Comedy" to 2940, "Action" to 2746, "Fantasy" to 2001, "Drama" to 1878,
+            "Adventure" to 1642, "Romance" to 1624, "Sci-Fi" to 1277, "Slice of Life" to 1219,
+            "Ecchi" to 656, "Mystery" to 624, "Mecha" to 427, "Sports" to 384,
+            "Music" to 274, "Horror" to 249, "Thriller" to 180, "Mahou Shoujo" to 178,
+            "Supernatural" to 131, "Chinese" to 48, "Cartoon" to 10
+        )
+        .sortedByDescending { it.second }
+        .map { it.first }
 
-    override val name = "VoirAnime"
-    override val baseUrl = "https://voir-anime.to"
+        return genres.map { genre ->
+            object : VoirAnimeBase() {
+                override val name = "VoirAnime ($genre)"
+                override val baseUrl = "https://voir-anime.to"
+
+                override fun popularAnimeRequest(page: Int): Request {
+                    val slug = genre.lowercase().replace(" ", "-")
+                    val url = if (page == 1) "$baseUrl/anime-genre/$slug/"
+                              else "$baseUrl/anime-genre/$slug/page/$page/"
+                    return GET(url, headers)
+                }
+            }
+        }
+    }
+}
+
+abstract class VoirAnimeBase : ParsedAnimeHttpSource() {
+
     override val lang = "fr"
     override val supportsLatest = false
 
@@ -32,65 +58,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    // ============================== GENRES ==============================
-
-    private val genreList: List<Genre> by lazy {
-        listOf(
-            "Comedy" to 2940,
-            "Action" to 2746,
-            "Fantasy" to 2001,
-            "Drama" to 1878,
-            "Adventure" to 1642,
-            "Romance" to 1624,
-            "Sci-Fi" to 1277,
-            "Slice of Life" to 1219,
-            "Ecchi" to 656,
-            "Mystery" to 624,
-            "Mecha" to 427,
-            "Sports" to 384,
-            "Music" to 274,
-            "Horror" to 249,
-            "Thriller" to 180,
-            "Mahou Shoujo" to 178,
-            "Supernatural" to 131,
-            "Chinese" to 48,
-            "Cartoon" to 10
-        )
-        .sortedByDescending { it.second }
-        .map { (name, _) ->
-            Genre(name, name.lowercase().replace(" ", "-"))
-        }
-    }
-
-    override fun fetchGenreList(): Observable<List<Genre>> = Observable.just(genreList)
-
-    override fun fetchGenrePage(page: Int, genre: Genre): Observable<AnimesPage> {
-        val url = if (page == 1) {
-            "$baseUrl/anime-genre/${genre.url}/"
-        } else {
-            "$baseUrl/anime-genre/${genre.url}/page/$page/"
-        }
-        val request = GET(url, headers)
-        return fetchPopularAnimePage(request, page)
-    }
-
-    private fun fetchPopularAnimePage(request: Request, page: Int): Observable<AnimesPage> {
-        return Observable.fromCallable {
-            val response = client.newCall(request).execute()
-            val document = Jsoup.parse(response.body?.string() ?: throw Exception("Empty body"))
-            val animes = document.select(popularAnimeSelector()).map { popularAnimeFromElement(it) }
-            val hasNextPage = document.select(popularAnimeNextPageSelector()).isNotEmpty()
-            AnimesPage(animes, hasNextPage)
-        }
-    }
-
-    // ============================== POPULAR ==============================
-
-    override fun popularAnimeRequest(page: Int): Request {
-        val url = if (page == 1) "$baseUrl/?filter=subbed"
-                  else "$baseUrl/page/$page/?filter=subbed"
-        return GET(url, headers)
-    }
+    // ============================== POPULAR (will be overridden per genre) ==============================
 
     override fun popularAnimeSelector(): String = ".page-item-detail"
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
@@ -135,7 +103,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== SEARCH ==============================
+    // ============================== SEARCH (VF filter) ==============================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (page > 1) throw Exception("No more pages")
@@ -155,7 +123,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val document = Jsoup.parse(cleanHtml)
         val animes = document.select(searchAnimeSelector())
             .map { searchAnimeFromElement(it) }
-            .filter { !it.title.contains("(VF)") }          // <-- remove VF results
+            .filter { !it.title.contains("(VF)") }
         return AnimesPage(animes, false)
     }
 
@@ -194,13 +162,11 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 .text()
         )
 
-        // Studio – match heading containing "Studio" or "Studios" case-insensitively
         val studioItem = document.select(".post-content_item").firstOrNull { item ->
             item.selectFirst(".summary-heading h5")?.text()?.trim()?.contains("Studio", ignoreCase = true) == true
         }
         author = studioItem?.selectFirst(".summary-content")?.text()?.trim().orEmpty()
 
-        // Thumbnail (if available on detail page)
         val img = document.select("div.summary_image img").first()
         if (img != null) {
             thumbnail_url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
