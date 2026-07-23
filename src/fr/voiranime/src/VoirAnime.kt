@@ -217,51 +217,46 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // =======    // ============================ VIDEO LINKS (DEBUG VERSION) ============================
+    // ====    // ============================ VIDEO LINKS (AFFICHEUR DE LIENS) ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
-        
-        // 1. Vérifions si la page charge bien et contient notre mot-clé
-        if (!body.contains("thisChapterSources")) {
-            // S'il n'est pas là, on affiche les 100 premiers caractères de la page
-            // pour voir si on a une erreur 404, un blocage Cloudflare, ou le mauvais HTML.
-            val debugHtml = body.take(100).replace("\n", " ") 
-            return listOf(Video("http://fake.com", "ERREUR PAGE: $debugHtml", "http://fake.com"))
-        }
 
         val document = Jsoup.parse(body, response.request.url.toString())
-
         val scriptElement = document.select("script").firstOrNull {
             it.data().contains("thisChapterSources")
-        }
-        
-        if (scriptElement == null) {
-            return listOf(Video("http://fake.com", "ERREUR: Script tag introuvable", "http://fake.com"))
-        }
+        } ?: return listOf(Video("http://fake.com/video.mp4", "ERREUR: Pas de script thisChapterSources", "http://fake.com/video.mp4"))
 
         val scriptText = scriptElement.data()
 
-        // 2. Vérifions si le Regex correspond à quelque chose
-        // Attention: Dans un string brut Kotlin ("""), \\" cherche 2 backslashes. J'ai simplifié le regex pour tester.
-        val pattern = """"LECTEUR ([^"]+)"\s*:\s*"<iframe[^>]+src=\\?"([^"\\]+)\\?"""".toRegex()
+        val pattern = """"([^"]*LECTEUR[^"]*)"\s*:\s*"<iframe[^>]+src=\\?["']([^"'\\>]+)\\?["']""".toRegex(RegexOption.IGNORE_CASE)
         val matches = pattern.findAll(scriptText).toList()
 
         if (matches.isEmpty()) {
-            // Si le regex échoue, on affiche un bout du script Javascript pour l'étudier
-            val scriptSnippet = scriptText.substringAfter("thisChapterSources").take(150)
-            return listOf(Video("http://fake.com", "REGEX FAIL: $scriptSnippet", "http://fake.com"))
+            return listOf(Video("http://fake.com/video.mp4", "ERREUR: Aucun lien trouvé par le Regex", "http://fake.com/video.mp4"))
         }
 
         val videos = mutableListOf<Video>()
+
         for (match in matches) {
-            val shortName = match.groupValues[1].trim()
-            val iframeSrc = match.groupValues[2]
-            videos.add(Video(iframeSrc, "$shortName - VoirAnime", iframeSrc))
+            val fullName = match.groupValues[1]    // ex: "LECTEUR myTV"
+            var iframeSrc = match.groupValues[2]   // ex: "https://vidmoly.biz/embed-..."
+
+            if (iframeSrc.startsWith("//")) {
+                iframeSrc = "https:$iframeSrc"
+            }
+
+            // L'astuce est ici : on met le nom du lecteur ET le lien dans le titre de la vidéo
+            val debugTitle = "$fullName -> $iframeSrc"
+
+            // On utilise un faux lien .mp4 en URL pour qu'Aniyomi accepte d'afficher le menu
+            // sans lancer l'erreur "Unrecognized file format" immédiatement.
+            videos.add(Video("http://fake.com/video.mp4", debugTitle, "http://fake.com/video.mp4"))
         }
 
         return videos
     }
+
 
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
