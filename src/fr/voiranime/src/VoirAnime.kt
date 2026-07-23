@@ -15,6 +15,8 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class VoirAnime : ParsedAnimeHttpSource() {
 
@@ -49,9 +51,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
-        // --- Title and URL ---
         val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
-        
         if (titleElement != null) {
             anime.title = titleElement.text()
             anime.setUrlWithoutDomain(titleElement.attr("href"))
@@ -63,7 +63,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // --- High-Quality Thumbnail (srcset parser) ---
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
             var thumbUrl = imgElement.absUrl("data-src").ifEmpty {
@@ -72,7 +71,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
             val srcset = imgElement.attr("srcset")
             if (srcset.isNotEmpty()) {
-                // Find the image with the highest 'w' (width) value
                 val bestQuality = srcset.split(",")
                     .map { it.trim() }
                     .maxByOrNull { 
@@ -83,7 +81,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
                     thumbUrl = if (bestQuality.startsWith("http")) bestQuality else "$baseUrl$bestQuality"
                 }
             }
-            
             anime.thumbnail_url = thumbUrl
         }
         
@@ -114,15 +111,9 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     override fun searchAnimeParse(response: Response): AnimesPage {
         val rawResponse = response.body.string()
-        
-        // Isolate the pure HTML
         val cleanHtml = rawResponse.substringAfter("ASPSTART_HTML").substringBefore("_ASPEND_HTML")
-        
-        // Convert the string into a Jsoup Document
         val document = Jsoup.parse(cleanHtml)
-        
         val animes = document.select(searchAnimeSelector()).map { searchAnimeFromElement(it) }
-        
         return AnimesPage(animes, false)
     }
 
@@ -151,25 +142,62 @@ class VoirAnime : ParsedAnimeHttpSource() {
         return anime
     }
 
-    // =========================== Anime Details (Ignored) ==========================
-        // =========================== Anime Details ===========================
-    override fun animeDetailsParse(document: Document): SAnime {
-        // We look for the common Madara info wrappers to grab the juicy HTML
-        val infoBox = document.select("div.summary_image, div.summary_content, div.c-page-content, div.post-content").first()
-        
-        if (infoBox != null) {
-            // DELIBERATE CRASH: Print the HTML of the details box!
-            throw Exception("DETAILS HTML:\n\n" + infoBox.html().take(2500))
-        } else {
-            // Fallback just in case they use custom CSS classes
-            throw Exception("DETAILS HTML (Fallback):\n\n" + document.body().html().take(2500))
+    // =========================== Anime Details ===========================
+    
+    override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
+        // Description
+        description = document.select(".description-summary .summary__content p").text()
+
+        // Genres
+        genre = document.select(".post-content_item .genres-content a")
+            .joinToString(", ") { it.text() }
+
+        // Status
+        status = parseStatus(document.select(".post-content_item .summary-content").text())
+
+        // Thumbnail (if available on details page)
+        val img = document.select("div.summary_image img").first()
+        if (img != null) {
+            thumbnail_url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
     }
 
+    private fun parseStatus(statusStr: String): Int {
+        return when {
+            statusStr.contains("EN COURS", ignoreCase = true) -> SAnime.ONGOING
+            statusStr.contains("TERMINÉ", ignoreCase = true) || statusStr.contains("COMPLETED", ignoreCase = true) -> SAnime.COMPLETED
+            else -> SAnime.UNKNOWN
+        }
+    }
 
-    // ============================== Episodes (Ignored) ==============================
-    override fun episodeListSelector(): String = throw UnsupportedOperationException()
-    override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
+    // ============================== Episodes ==============================
+    
+    override fun episodeListSelector(): String = ".listing-chapters_wrap ul.main.version-chap li.wp-manga-chapter"
+
+    override fun episodeFromElement(element: Element): SEpisode = SEpisode.create().apply {
+        val urlElement = element.select("a").first()
+        if (urlElement != null) {
+            setUrlWithoutDomain(urlElement.attr("href"))
+            name = urlElement.text()
+        }
+
+        val dateElement = element.select("span.chapter-release-date i").first()
+        date_upload = parseEpisodeDate(dateElement?.text())
+    }
+
+    private fun parseEpisodeDate(date: String?): Long {
+        // If date text is relative (e.g., "20 minutes ago"), fallback to current time
+        // Otherwise, add a basic parser if they use formatted dates like "July 16, 2026"
+        return if (date.isNullOrBlank()) {
+            System.currentTimeMillis()
+        } else {
+            try {
+                SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH).parse(date)?.time ?: System.currentTimeMillis()
+            } catch (_: Exception) {
+                System.currentTimeMillis()
+            }
+        }
+    }
 
     // ============================ Video Links (Ignored) =============================
     override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
