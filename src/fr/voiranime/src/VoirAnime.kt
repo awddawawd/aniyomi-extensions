@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -15,16 +16,21 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // --- Core Source Info ---
     override val name = "VoirAnime"
-    // Keep the baseUrl completely clean without parameters or trailing slashes
     override val baseUrl = "https://voir-anime.to" 
     override val lang = "fr"
     override val supportsLatest = false
 
+    // ============================== Network & Security ==============================
+    
+    // This tells Cloudflare we are a normal Windows computer running Google Chrome
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
+        .add("Referer", "$baseUrl/")
+        .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+
     // ============================== Popular (Homepage) ===============================
     
-    // 1. The URL we want to scrape for the homepage
     override fun popularAnimeRequest(page: Int): Request {
-        // We inject the ?filter=subbed here so pagination works perfectly
         val url = if (page == 1) {
             "$baseUrl/?filter=subbed"
         } else {
@@ -33,13 +39,10 @@ class VoirAnime : ParsedAnimeHttpSource() {
         return GET(url, headers)
     }
 
-    // 2. The CSS selector for the repeating box that holds ONE anime
     override fun popularAnimeSelector(): String = ".page-item-detail"
 
-    // 3. The CSS selector for the "Next Page" button
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
 
-        // 4. Extracting the details 
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
@@ -57,20 +60,16 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // --- Thumbnail Debug ---
+        // --- Thumbnail ---
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
-            val extractedUrl = imgElement.attr("src")
-            
-            // DELIBERATE CRASH: Let's see exactly what URL it grabbed!
-            throw Exception("EXTRACTED IMAGE URL:\n[$extractedUrl]")
-        } else {
-            throw Exception("CRASH: Could not find the <img> tag at all!")
+            anime.thumbnail_url = imgElement.absUrl("data-src").ifEmpty {
+                imgElement.absUrl("src")
+            }
         }
         
         return anime
     }
-
 
     // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
