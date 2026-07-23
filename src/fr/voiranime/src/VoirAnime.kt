@@ -49,7 +49,9 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
+        // --- Title and URL ---
         val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
+        
         if (titleElement != null) {
             anime.title = titleElement.text()
             anime.setUrlWithoutDomain(titleElement.attr("href"))
@@ -61,12 +63,28 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
+        // --- High-Quality Thumbnail (srcset parser) ---
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
-            val rawUrl = imgElement.absUrl("data-src").ifEmpty {
+            var thumbUrl = imgElement.absUrl("data-src").ifEmpty {
                 imgElement.absUrl("src")
             }
-            anime.thumbnail_url = rawUrl.replace(Regex("-\\d+x\\d+"), "")
+
+            val srcset = imgElement.attr("srcset")
+            if (srcset.isNotEmpty()) {
+                // Find the image with the highest 'w' (width) value
+                val bestQuality = srcset.split(",")
+                    .map { it.trim() }
+                    .maxByOrNull { 
+                        it.substringAfterLast(" ").removeSuffix("w").toIntOrNull() ?: 0 
+                    }?.substringBefore(" ")
+                    
+                if (!bestQuality.isNullOrEmpty()) {
+                    thumbUrl = if (bestQuality.startsWith("http")) bestQuality else "$baseUrl$bestQuality"
+                }
+            }
+            
+            anime.thumbnail_url = thumbUrl
         }
         
         return anime
@@ -94,7 +112,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
         return POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
     }
 
-    // Override the parse step to slice out the weird Ajax Search Pro tags
     override fun searchAnimeParse(response: Response): AnimesPage {
         val rawResponse = response.body.string()
         
@@ -104,14 +121,11 @@ class VoirAnime : ParsedAnimeHttpSource() {
         // Convert the string into a Jsoup Document
         val document = Jsoup.parse(cleanHtml)
         
-        // Select all the search results and map them to SAnime objects
         val animes = document.select(searchAnimeSelector()).map { searchAnimeFromElement(it) }
         
-        // Return the list (with 'false' indicating there is no "Next Page" for this dropdown)
         return AnimesPage(animes, false)
     }
 
-    // New CSS selectors based on the Ajax Search Pro HTML
     override fun searchAnimeSelector(): String = "div.item.asp_r_pagepost"
     override fun searchAnimeNextPageSelector(): String? = null
     
@@ -128,7 +142,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
         if (imgElement != null) {
             anime.thumbnail_url = imgElement.absUrl("src")
         } else {
-            // Fallback just in case the image is stored on the div wrapper
             val divImg = element.select("div.asp_image").first()
             if (divImg != null) {
                 anime.thumbnail_url = divImg.absUrl("data-src")
