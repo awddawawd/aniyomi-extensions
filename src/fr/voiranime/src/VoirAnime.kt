@@ -1,11 +1,14 @@
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
@@ -22,7 +25,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================== Network & Security ==============================
     
-    // This tells Cloudflare we are a normal Windows computer running Google Chrome
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
@@ -43,7 +45,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
 
-        // 4. Extracting the details 
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
@@ -67,15 +68,11 @@ class VoirAnime : ParsedAnimeHttpSource() {
             val rawUrl = imgElement.absUrl("data-src").ifEmpty {
                 imgElement.absUrl("src")
             }
-            
-            // Regex to find and remove any WordPress dimension suffixes (e.g., "-110x150") 
-            // before the file extension, forcing the server to load the original high-res file!
             anime.thumbnail_url = rawUrl.replace(Regex("-\\d+x\\d+"), "")
         }
         
         return anime
     }
-
 
     // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -83,9 +80,31 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== Search (Ignored) ===============================
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
-    override fun searchAnimeSelector(): String = throw UnsupportedOperationException()
+    // ============================== Search ===============================
+    
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+        // Dropdown live searches usually don't have pages. If Aniyomi asks for page 2, we just stop.
+        if (page > 1) throw Exception("No more pages")
+        
+        val formBody = FormBody.Builder()
+            .add("action", "ajaxsearchpro_search")
+            .add("aspp", query) 
+            .add("asid", "3")
+            .add("asp_inst_id", "3_1")
+            .add("options", "aspf%5Bvf_1%5D%3Dvf%26asp_gen%5B%5D%3Dexcerpt%26asp_gen%5B%5D%3Dcontent%26asp_gen%5B%5D%3Dtitle%26filters_initial%3D1%26filters_changed%3D0%26qtranslate_lang%3D0%26current_page_id%3D15")
+            .build()
+
+        return POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
+    }
+
+    override fun searchAnimeParse(response: Response): AnimesPage {
+        val rawResponse = response.body.string()
+        
+        // DELIBERATE CRASH: Display the first 1500 characters of the server's reply!
+        throw Exception("SEARCH RESPONSE:\n\n" + rawResponse.take(1500))
+    }
+
+    override fun searchAnimeSelector(): String = ""
     override fun searchAnimeNextPageSelector(): String? = null
     override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
