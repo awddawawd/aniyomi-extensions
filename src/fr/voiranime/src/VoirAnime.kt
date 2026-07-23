@@ -39,8 +39,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     // 3. The CSS selector for the "Next Page" button
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
 
-    // 4. Extracting the details 
-    // 4. Extracting the details 
+        // 4. Extracting the details 
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
@@ -58,17 +57,20 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // --- Thumbnail ---
+        // --- Thumbnail Debug ---
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
-            // Safely grab the image without modifying the URL
-            anime.thumbnail_url = imgElement.absUrl("data-src").ifEmpty {
-                imgElement.absUrl("src")
-            }
+            val extractedUrl = imgElement.attr("src")
+            
+            // DELIBERATE CRASH: Let's see exactly what URL it grabbed!
+            throw Exception("EXTRACTED IMAGE URL:\n[$extractedUrl]")
+        } else {
+            throw Exception("CRASH: Could not find the <img> tag at all!")
         }
         
         return anime
     }
+
 
     // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
