@@ -1,5 +1,6 @@
 ext {
     extName = 'VoirAnimeVF'
+    pkgNameSuffix = 'fr.voiranimevf'
     extClass = '.VoirAnimeVF'
     extVersionCode = 1
     isNsfw = false
