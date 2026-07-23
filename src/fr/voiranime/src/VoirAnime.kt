@@ -100,7 +100,9 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val rawResponse = response.body.string()
         val cleanHtml = rawResponse.substringAfter("ASPSTART_HTML").substringBefore("_ASPEND_HTML")
         val document = Jsoup.parse(cleanHtml)
-        val animes = document.select(searchAnimeSelector()).map { searchAnimeFromElement(it) }
+        val animes = document.select(searchAnimeSelector())
+            .map { searchAnimeFromElement(it) }
+            .filter { !it.title.contains("(VF)") }   // <-- removes any result containing (VF)
         return AnimesPage(animes, false)
     }
 
