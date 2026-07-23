@@ -7,8 +7,8 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
-import eu.kanade.tachiyomi.lib.filemoon.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.streamtape.StreamtapeExtractor
+import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
 import eu.kanade.tachiyomi.lib.voe.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -56,7 +56,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         GenreFilter(genres)
     )
 
-    // ============================== POPULAR (with genre support) ==============================
+    // ============================== POPULAR ==============================
 
     override fun popularAnimeRequest(page: Int): Request = popularAnimeRequest(page, getFilterList())
 
@@ -120,7 +120,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== SEARCH (VF filter) ==============================
+    // ============================== SEARCH ==============================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (page > 1) throw Exception("No more pages")
@@ -224,7 +224,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> {
-        val document = response.asJsoup()  // requires import eu.kanade.tachiyomi.network.asJsoup
+        val document = response.asJsoup()
         val videos = mutableListOf<Video>()
 
         val iframes = document.select("iframe")
@@ -236,7 +236,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 src.contains("voe.sx") -> "VOE"
                 src.contains("filemoon.sx") -> "MOON"
                 src.contains("streamtape.com") -> "Stape"
-                // TODO: add myTV host here, e.g. src.contains("mytv.to") -> "myTV"
+                // TODO: add myTV detection
                 else -> continue
             }
             videos.add(Video(src, "$name - VoirAnime", src))
@@ -255,9 +255,8 @@ class VoirAnime : ParsedAnimeHttpSource() {
                     FilemoonExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
                 }
                 url.contains("streamtape.com") -> {
-                    StreamtapeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
+                    StreamTapeExtractor(client).videosFromUrl(url).firstOrNull()?.videoUrl ?: ""
                 }
-                // TODO: add myTV extractor here
                 else -> ""
             }
         } catch (e: Exception) {
