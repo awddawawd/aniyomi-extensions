@@ -40,39 +40,11 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun popularAnimeNextPageSelector(): String = ".nextpostslink"
 
     // 4. Extracting the details 
-    override fun popularAnimeFromElement(element: Element): SAnime {
-        val anime = SAnime.create()
-        
-        // --- Title and URL ---
-        val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
-        
-        if (titleElement != null) {
-            anime.title = titleElement.text()
-            anime.setUrlWithoutDomain(titleElement.attr("href"))
-        } else {
-            // Fallback: Just grab the first link we see in the container if the heading is missing
-            val fallbackLink = element.select("a").first()
-            if (fallbackLink != null) {
-                anime.title = fallbackLink.attr("title").ifEmpty { fallbackLink.text() }
-                anime.setUrlWithoutDomain(fallbackLink.attr("href"))
-            }
-        }
-
-        // --- Thumbnail (Upgraded Extraction) ---
-        val imgElement = element.select("img").first()
-        if (imgElement != null) {
-            // Check all common lazy-load attributes, falling back to absolute URL parsing
-            anime.thumbnail_url = imgElement.attr("data-src").ifEmpty {
-                imgElement.attr("data-lazy-src").ifEmpty {
-                    imgElement.attr("data-original").ifEmpty {
-                        imgElement.absUrl("src") // absUrl automatically fixes missing domains!
-                    }
-                }
-            }
-        }
-        
-        return anime
+        override fun popularAnimeFromElement(element: Element): SAnime {
+        // This will deliberately crash the app and print the HTML of the VERY FIRST anime box
+        throw Exception("ANIME BOX HTML:\n\n" + element.html())
     }
+
 
     // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
