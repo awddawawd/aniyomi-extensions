@@ -7,6 +7,9 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
+import eu.kanade.tachiyomi.lib.filemoon.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.streamtape.StreamtapeExtractor
+import eu.kanade.tachiyomi.lib.voe.VoeExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import okhttp3.FormBody
@@ -219,8 +222,69 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================ VIDEO LINKS ============================
 
+    // Standard video methods are overridden by fetchVideoList. They are not used.
     override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
     override fun videoListSelector(): String = throw UnsupportedOperationException()
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
+
+    // We fetch video list by overriding fetchVideoList
+    override fun fetchVideoList(episode: SEpisode): Observable<List<Video>> {
+        val episodeUrl = episode.url
+        val request = GET(episodeUrl, headers)
+        return client.newCall(request).asObservable().map { response ->
+            val document = response.asJsoup()
+            val videoCandidates = extractVideoCandidates(document)
+            videoCandidates.map { candidate ->
+                val directUrl = extractVideoUrl(candidate)
+                Video(directUrl, candidate.name, directUrl)
+            }
+        }
+    }
+
+    private data class VideoCandidate(val url: String, val name: String)
+
+    private fun extractVideoCandidates(document: Document): List<VideoCandidate> {
+        val candidates = mutableListOf<VideoCandidate>()
+        // Search for iframes that belong to known players
+        val iframes = document.select("iframe")
+        for (iframe in iframes) {
+            val src = iframe.attr("data-src").ifEmpty { iframe.attr("src") }
+            if (src.isBlank()) continue
+
+            val name = when {
+                src.contains("voe.sx") -> "VOE"
+                src.contains("filemoon.sx") -> "MOON"
+                src.contains("streamtape.com") -> "Stape"
+                // TODO: add myTV detection here, e.g. src.contains("mytv.to")
+                else -> continue // unknown, skip
+            }
+            candidates.add(VideoCandidate(src, name))
+        }
+        return candidates
+    }
+
+    private fun extractVideoUrl(candidate: VideoCandidate): String {
+        return try {
+            when (candidate.name) {
+                "VOE" -> {
+                    val extractor = VoeExtractor(client)
+                    extractor.videosFromUrl(candidate.url).firstOrNull()?.videoUrl ?: ""
+                }
+                "MOON" -> {
+                    val extractor = FilemoonExtractor(client)
+                    extractor.videosFromUrl(candidate.url).firstOrNull()?.videoUrl ?: ""
+                }
+                "Stape" -> {
+                    val extractor = StreamtapeExtractor(client)
+                    extractor.videosFromUrl(candidate.url).firstOrNull()?.videoUrl ?: ""
+                }
+                // TODO: add myTV extractor here
+                else -> ""
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            ""
+        }
+    }
 }
