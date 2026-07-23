@@ -151,8 +151,21 @@ class VoirAnime : ParsedAnimeHttpSource() {
         return anime
     }
 
-    // =========================== Anime Details (Ignored) ===========================
-    override fun animeDetailsParse(document: Document): SAnime = throw UnsupportedOperationException()
+    // =========================== Anime Details (Ignored) ==========================
+        // =========================== Anime Details ===========================
+    override fun animeDetailsParse(document: Document): SAnime {
+        // We look for the common Madara info wrappers to grab the juicy HTML
+        val infoBox = document.select("div.summary_image, div.summary_content, div.c-page-content, div.post-content").first()
+        
+        if (infoBox != null) {
+            // DELIBERATE CRASH: Print the HTML of the details box!
+            throw Exception("DETAILS HTML:\n\n" + infoBox.html().take(2500))
+        } else {
+            // Fallback just in case they use custom CSS classes
+            throw Exception("DETAILS HTML (Fallback):\n\n" + document.body().html().take(2500))
+        }
+    }
+
 
     // ============================== Episodes (Ignored) ==============================
     override fun episodeListSelector(): String = throw UnsupportedOperationException()
