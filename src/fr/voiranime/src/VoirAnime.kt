@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -15,55 +17,50 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // --- Core Source Info ---
     override val name = "VoirAnime"
-    override val baseUrl = "https://voiranime.com" // Update this if their base URL changed
+    override val baseUrl = "https://voir-anime.to" 
     override val lang = "fr"
     override val supportsLatest = false
 
     // ============================== Popular (Homepage) ===============================
-
-    // 1. The URL we want to scrape for the homepage
+    
     override fun popularAnimeRequest(page: Int): Request {
-        // You will need to check the website to see exactly how their URL looks for popular lists/pages
-        return GET("$baseUrl/anime/?page=$page", headers)
+        // Requesting the base URL so we can see what the homepage HTML looks like
+        return GET(baseUrl, headers)
     }
 
-    // 2. The CSS selector that wraps EACH individual anime on that page
-    override fun popularAnimeSelector(): String = "div.item" // <-- Placeholder!
-
-    // 3. The CSS selector for the "Next Page" button (so you can scroll infinitely)
-    override fun popularAnimeNextPageSelector(): String = "div.pagination a.next" // <-- Placeholder!
-
-    // 4. Extracting the details for a single anime
-    override fun popularAnimeFromElement(element: Element): SAnime {
-        val anime = SAnime.create()
-
-        // You will replace these placeholders with the actual HTML tags from the website
-        // anime.title = element.select("h3.title").text()
-        // anime.setUrlWithoutDomain(element.select("a").attr("href"))
-        // anime.thumbnail_url = element.select("img").attr("src")
-
-        return anime
+    // Intercept the response BEFORE the app tries to look for CSS selectors
+    override fun popularAnimeParse(response: Response): AnimesPage {
+        val document = response.asJsoup()
+        
+        // Grab the first 1500 characters of the HTML to fit on your phone screen.
+        // Throwing it as an Exception forces the app to display it as an error message!
+        throw Exception("HTML RECEIVED:\n\n" + document.html().take(1500))
     }
 
-    // ============================== Latest (Ignored for now) ===============================
+    // These are required by the compiler, but will never be reached because we throw an Exception above.
+    override fun popularAnimeSelector(): String = ""
+    override fun popularAnimeNextPageSelector(): String? = null
+    override fun popularAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+
+    // ============================== Latest (Ignored) ===============================
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== Search (Ignored for now) ===============================
+    // ============================== Search (Ignored) ===============================
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = throw UnsupportedOperationException()
     override fun searchAnimeSelector(): String = throw UnsupportedOperationException()
-    override fun searchAnimeNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun searchAnimeNextPageSelector(): String? = null
     override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // =========================== Anime Details (Ignored for now) ===========================
+    // =========================== Anime Details (Ignored) ===========================
     override fun animeDetailsParse(document: Document): SAnime = throw UnsupportedOperationException()
 
-    // ============================== Episodes (Ignored for now) ==============================
+    // ============================== Episodes (Ignored) ==============================
     override fun episodeListSelector(): String = throw UnsupportedOperationException()
     override fun episodeFromElement(element: Element): SEpisode = throw UnsupportedOperationException()
 
-    // ============================ Video Links (Ignored for now) =============================
+    // ============================ Video Links (Ignored) =============================
     override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
 }
