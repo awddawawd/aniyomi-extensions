@@ -20,7 +20,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override val supportsLatest = false
 
     // ============================== Popular (Homepage) ===============================
-    
+
     // 1. The URL we want to scrape for the homepage
     override fun popularAnimeRequest(page: Int): Request {
         // You will need to check the website to see exactly how their URL looks for popular lists/pages
@@ -36,12 +36,12 @@ class VoirAnime : ParsedAnimeHttpSource() {
     // 4. Extracting the details for a single anime
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
-        
+
         // You will replace these placeholders with the actual HTML tags from the website
         // anime.title = element.select("h3.title").text()
         // anime.setUrlWithoutDomain(element.select("a").attr("href"))
         // anime.thumbnail_url = element.select("img").attr("src")
-        
+
         return anime
     }
 
