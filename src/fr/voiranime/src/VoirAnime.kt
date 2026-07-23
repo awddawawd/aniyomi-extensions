@@ -217,10 +217,34 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ============================ VIDEO LINKS (not implemented) ============================
+    // ============================ VIDEO LINKS ============================
 
-    override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException("Video extraction not yet implemented")
-    override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
-    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException("Not used")
+    override fun videoListParse(response: Response): List<Video> {
+        val document = Jsoup.parse(response.body!!.string(), response.request.url.toString())
+        val videos = mutableListOf<Video>()
+
+        // Locate the script containing the thisChapterSources object
+        val script = document.select("script").find {
+            it.data().contains("thisChapterSources")
+        } ?: return videos
+
+        val scriptText = script.data()
+
+        // Extract all player entries using regex
+        val pattern = """"(LECTEUR [^"]+)"\s*:\s*"<iframe[^>]+src=\\"([^"]+)\\"""".toRegex()
+        val matches = pattern.findAll(scriptText)
+
+        for (match in matches) {
+            val fullName = match.groupValues[1]    // e.g. "LECTEUR myTV"
+            val iframeSrc = match.groupValues[2]   // e.g. "https://vidmoly.biz/embed-mtjbfeu8h5yj.html"
+            val shortName = fullName.removePrefix("LECTEUR ").trim()
+            videos.add(Video(iframeSrc, "$shortName - VoirAnime", iframeSrc))
+        }
+
+        return videos
+    }
+
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun videoListSelector(): String = throw UnsupportedOperationException()
+    override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException()
 }
