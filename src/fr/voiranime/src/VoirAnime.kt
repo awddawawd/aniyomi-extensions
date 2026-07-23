@@ -217,7 +217,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ====    // ============================ VIDEO LINKS (AFFICHEUR DE LIENS) ============================
+    // ===    // ============================ VIDEO LINKS (DUMP DU JAVASCRIPT) ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
@@ -225,37 +225,33 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val document = Jsoup.parse(body, response.request.url.toString())
         val scriptElement = document.select("script").firstOrNull {
             it.data().contains("thisChapterSources")
-        } ?: return listOf(Video("http://fake.com/video.mp4", "ERREUR: Pas de script thisChapterSources", "http://fake.com/video.mp4"))
+        } ?: return listOf(Video("http://fake.com/1.mp4", "ERREUR: Pas de script", "http://fake.com/1.mp4"))
 
         val scriptText = scriptElement.data()
-
-        val pattern = """"([^"]*LECTEUR[^"]*)"\s*:\s*"<iframe[^>]+src=\\?["']([^"'\\>]+)\\?["']""".toRegex(RegexOption.IGNORE_CASE)
-        val matches = pattern.findAll(scriptText).toList()
-
-        if (matches.isEmpty()) {
-            return listOf(Video("http://fake.com/video.mp4", "ERREUR: Aucun lien trouvé par le Regex", "http://fake.com/video.mp4"))
+        
+        // On trouve où commence le mot "thisChapterSources"
+        val startIndex = scriptText.indexOf("thisChapterSources")
+        
+        // On prend les 250 premiers caractères juste après (pour voir la structure)
+        // On enlève les sauts de ligne pour que l'affichage soit propre
+        val snippet = scriptText.substring(startIndex).take(250).replace("\n", " ").replace("\r", " ")
+        
+        // On coupe le texte en morceaux de 45 caractères pour que ça tienne sur ton écran de téléphone !
+        val chunks = snippet.chunked(45)
+        
+        val videos = chunks.mapIndexed { index, text ->
+            // On met le bout de code directement dans le nom de la vidéo
+            Video("http://fake.com/$index.mp4", "Ligne $index: $text", "http://fake.com/$index.mp4")
         }
 
-        val videos = mutableListOf<Video>()
-
-        for (match in matches) {
-            val fullName = match.groupValues[1]    // ex: "LECTEUR myTV"
-            var iframeSrc = match.groupValues[2]   // ex: "https://vidmoly.biz/embed-..."
-
-            if (iframeSrc.startsWith("//")) {
-                iframeSrc = "https:$iframeSrc"
-            }
-
-            // L'astuce est ici : on met le nom du lecteur ET le lien dans le titre de la vidéo
-            val debugTitle = "$fullName -> $iframeSrc"
-
-            // On utilise un faux lien .mp4 en URL pour qu'Aniyomi accepte d'afficher le menu
-            // sans lancer l'erreur "Unrecognized file format" immédiatement.
-            videos.add(Video("http://fake.com/video.mp4", debugTitle, "http://fake.com/video.mp4"))
+        // Si par hasard la liste est vide (ne devrait pas arriver)
+        if (videos.isEmpty()) {
+            return listOf(Video("http://fake.com/1.mp4", "ERREUR: Snippet vide", "http://fake.com/1.mp4"))
         }
 
         return videos
     }
+
 
 
 
