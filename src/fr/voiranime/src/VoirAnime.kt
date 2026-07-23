@@ -284,9 +284,16 @@ class VoirAnime : ParsedAnimeHttpSource() {
                     }
                 }
             } catch (e: Exception) {
-                val errorMsg = e.message?.take(30) ?: "Erreur inconnue"
+                // Si l'erreur n'a pas de texte descriptif (ex: NullPointerException), 
+                // on affiche le vrai nom technique de l'erreur.
+                val errorMsg = if (!e.message.isNullOrBlank()) {
+                    e.message?.take(40)
+                } else {
+                    e.javaClass.simpleName
+                }
                 videos.add(Video(dummyUrl, "$shortName - Erreur: $errorMsg", dummyUrl))
             }
+
         }
 
         // --- TRI INTELLIGENT ---
