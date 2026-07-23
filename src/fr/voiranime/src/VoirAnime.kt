@@ -12,6 +12,7 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -48,9 +49,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
         
-        // --- Title and URL ---
         val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
-        
         if (titleElement != null) {
             anime.title = titleElement.text()
             anime.setUrlWithoutDomain(titleElement.attr("href"))
@@ -62,7 +61,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // --- High-Quality Thumbnail ---
         val imgElement = element.select("div.item-thumb img").first()
         if (imgElement != null) {
             val rawUrl = imgElement.absUrl("data-src").ifEmpty {
@@ -82,7 +80,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================== Search ===============================
     
-        // 1. Building the POST request with the hidden Form Data
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (page > 1) throw Exception("No more pages")
         
@@ -91,23 +88,55 @@ class VoirAnime : ParsedAnimeHttpSource() {
             .add("aspp", query) 
             .add("asid", "3")
             .add("asp_inst_id", "3_1")
-            // Use addEncoded so OkHttp doesn't double-encode the string!
             .addEncoded("options", "aspf%5Bvf_1%5D%3Dvf%26asp_gen%5B%5D%3Dexcerpt%26asp_gen%5B%5D%3Dcontent%26asp_gen%5B%5D%3Dtitle%26filters_initial%3D1%26filters_changed%3D0%26qtranslate_lang%3D0%26current_page_id%3D15")
             .build()
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
     }
 
+    // Override the parse step to slice out the weird Ajax Search Pro tags
     override fun searchAnimeParse(response: Response): AnimesPage {
         val rawResponse = response.body.string()
         
-        // DELIBERATE CRASH: Display the first 1500 characters of the server's reply!
-        throw Exception("SEARCH RESPONSE:\n\n" + rawResponse.take(1500))
+        // Isolate the pure HTML
+        val cleanHtml = rawResponse.substringAfter("ASPSTART_HTML").substringBefore("_ASPEND_HTML")
+        
+        // Convert the string into a Jsoup Document
+        val document = Jsoup.parse(cleanHtml)
+        
+        // Select all the search results and map them to SAnime objects
+        val animes = document.select(searchAnimeSelector()).map { searchAnimeFromElement(it) }
+        
+        // Return the list (with 'false' indicating there is no "Next Page" for this dropdown)
+        return AnimesPage(animes, false)
     }
 
-    override fun searchAnimeSelector(): String = ""
+    // New CSS selectors based on the Ajax Search Pro HTML
+    override fun searchAnimeSelector(): String = "div.item.asp_r_pagepost"
     override fun searchAnimeNextPageSelector(): String? = null
-    override fun searchAnimeFromElement(element: Element): SAnime = throw UnsupportedOperationException()
+    
+    override fun searchAnimeFromElement(element: Element): SAnime {
+        val anime = SAnime.create()
+        
+        val titleElement = element.select("h3 a.asp_res_url").first()
+        if (titleElement != null) {
+            anime.title = titleElement.text()
+            anime.setUrlWithoutDomain(titleElement.attr("href"))
+        }
+
+        val imgElement = element.select("div.asp_image img").first()
+        if (imgElement != null) {
+            anime.thumbnail_url = imgElement.absUrl("src")
+        } else {
+            // Fallback just in case the image is stored on the div wrapper
+            val divImg = element.select("div.asp_image").first()
+            if (divImg != null) {
+                anime.thumbnail_url = divImg.absUrl("data-src")
+            }
+        }
+        
+        return anime
+    }
 
     // =========================== Anime Details (Ignored) ===========================
     override fun animeDetailsParse(document: Document): SAnime = throw UnsupportedOperationException()
