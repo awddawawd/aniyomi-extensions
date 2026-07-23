@@ -2,12 +2,14 @@ package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Genre
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import io.reactivex.Observable
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -30,7 +32,59 @@ class VoirAnime : ParsedAnimeHttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    // ============================== Popular ==============================
+    // ============================== GENRES ==============================
+
+    private val genreList: List<Genre> by lazy {
+        listOf(
+            "Comedy" to 2940,
+            "Action" to 2746,
+            "Fantasy" to 2001,
+            "Drama" to 1878,
+            "Adventure" to 1642,
+            "Romance" to 1624,
+            "Sci-Fi" to 1277,
+            "Slice of Life" to 1219,
+            "Ecchi" to 656,
+            "Mystery" to 624,
+            "Mecha" to 427,
+            "Sports" to 384,
+            "Music" to 274,
+            "Horror" to 249,
+            "Thriller" to 180,
+            "Mahou Shoujo" to 178,
+            "Supernatural" to 131,
+            "Chinese" to 48,
+            "Cartoon" to 10
+        )
+        .sortedByDescending { it.second }
+        .map { (name, _) ->
+            Genre(name, name.lowercase().replace(" ", "-"))
+        }
+    }
+
+    override fun fetchGenreList(): Observable<List<Genre>> = Observable.just(genreList)
+
+    override fun fetchGenrePage(page: Int, genre: Genre): Observable<AnimesPage> {
+        val url = if (page == 1) {
+            "$baseUrl/anime-genre/${genre.url}/"
+        } else {
+            "$baseUrl/anime-genre/${genre.url}/page/$page/"
+        }
+        val request = GET(url, headers)
+        return fetchPopularAnimePage(request, page)
+    }
+
+    private fun fetchPopularAnimePage(request: Request, page: Int): Observable<AnimesPage> {
+        return Observable.fromCallable {
+            val response = client.newCall(request).execute()
+            val document = Jsoup.parse(response.body?.string() ?: throw Exception("Empty body"))
+            val animes = document.select(popularAnimeSelector()).map { popularAnimeFromElement(it) }
+            val hasNextPage = document.select(popularAnimeNextPageSelector()).isNotEmpty()
+            AnimesPage(animes, hasNextPage)
+        }
+    }
+
+    // ============================== POPULAR ==============================
 
     override fun popularAnimeRequest(page: Int): Request {
         val url = if (page == 1) "$baseUrl/?filter=subbed"
@@ -43,7 +97,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     override fun popularAnimeFromElement(element: Element): SAnime {
         val anime = SAnime.create()
-
         val titleElement = element.select("div.post-title h3 a, h3.h5 a").first()
         if (titleElement != null) {
             anime.title = titleElement.text()
@@ -75,14 +128,14 @@ class VoirAnime : ParsedAnimeHttpSource() {
         return anime
     }
 
-    // ============================== Latest ==============================
+    // ============================== LATEST ==============================
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector(): String? = null
     override fun latestUpdatesFromElement(element: Element): SAnime = throw UnsupportedOperationException()
 
-    // ============================== Search ==============================
+    // ============================== SEARCH ==============================
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (page > 1) throw Exception("No more pages")
@@ -102,7 +155,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val document = Jsoup.parse(cleanHtml)
         val animes = document.select(searchAnimeSelector())
             .map { searchAnimeFromElement(it) }
-            .filter { !it.title.contains("(VF)") }   // <-- removes any result containing (VF)
+            .filter { !it.title.contains("(VF)") }          // <-- remove VF results
         return AnimesPage(animes, false)
     }
 
@@ -128,7 +181,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         return anime
     }
 
-    // =========================== Anime Details ===========================
+    // =========================== ANIME DETAILS ===========================
 
     override fun animeDetailsParse(document: Document): SAnime = SAnime.create().apply {
         description = document.select(".description-summary .summary__content p").text()
@@ -162,7 +215,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ============================== Episodes ==============================
+    // ============================== EPISODES ==============================
 
     override fun episodeListSelector(): String = ".listing-chapters_wrap ul.main.version-chap li.wp-manga-chapter"
 
@@ -185,7 +238,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ============================ Video Links ============================
+    // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException()
     override fun videoListSelector(): String = throw UnsupportedOperationException()
