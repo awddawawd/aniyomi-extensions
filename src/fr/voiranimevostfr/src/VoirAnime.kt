@@ -7,11 +7,11 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -22,9 +22,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class VoirAnime : ParsedAnimeHttpSource() {
+class VoirAnimeVOSTFR : ParsedAnimeHttpSource() {
 
-    override val name = "VoirAnime"
+    override val name = "VoirAnime VOSTFR"
     override val baseUrl = "https://voir-anime.to"
     override val lang = "fr"
     override val supportsLatest = false
@@ -42,18 +42,17 @@ class VoirAnime : ParsedAnimeHttpSource() {
             "Adventure" to 1642, "Romance" to 1624, "Sci-Fi" to 1277, "Slice of Life" to 1219,
             "Ecchi" to 656, "Mystery" to 624, "Mecha" to 427, "Sports" to 384,
             "Music" to 274, "Horror" to 249, "Thriller" to 180, "Mahou Shoujo" to 178,
-            "Supernatural" to 131, "Chinese" to 48, "Cartoon" to 10,
+            "Supernatural" to 131, "Chinese" to 48, "Cartoon" to 10
         ).sortedByDescending { it.second }.map { it.first }
     }
 
     private class GenreFilter(genres: List<String>) : AnimeFilter.Select<String>(
-        "Genre",
-        genres.toTypedArray(),
+        "Genre", genres.toTypedArray()
     )
 
     override fun getFilterList(): AnimeFilterList = AnimeFilterList(
         AnimeFilter.Header("Choisissez un genre (du plus populaire au moins populaire)"),
-        GenreFilter(genres),
+        GenreFilter(genres)
     )
 
     // ============================== POPULAR ==============================
@@ -68,17 +67,13 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
         val url = if (selectedGenre != null) {
             val slug = selectedGenre.lowercase().replace(" ", "-")
-            if (page == 1) {
-                "$baseUrl/anime-genre/$slug/"
-            } else {
-                "$baseUrl/anime-genre/$slug/page/$page/"
-            }
+            // Ajout du filtre VOSTFR (subbed)
+            if (page == 1) "$baseUrl/anime-genre/$slug/?filter=subbed"
+            else "$baseUrl/anime-genre/$slug/page/$page/?filter=subbed"
         } else {
-            if (page == 1) {
-                "$baseUrl/?filter=subbed"
-            } else {
-                "$baseUrl/page/$page/?filter=subbed"
-            }
+            // Modification vers VOSTFR (subbed)
+            if (page == 1) "$baseUrl/?filter=subbed"
+            else "$baseUrl/page/$page/?filter=subbed"
         }
         return GET(url, headers)
     }
@@ -146,7 +141,8 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val document = Jsoup.parse(cleanHtml)
         val animes = document.select(searchAnimeSelector())
             .map { searchAnimeFromElement(it) }
-            .filter { !it.title.contains("(VF)") }
+            // Logique principale : on exclut les animes VF pour ne garder que la VOSTFR
+            .filter { !it.title.contains("(VF)", ignoreCase = true) }
         return AnimesPage(animes, false)
     }
 
@@ -182,7 +178,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
         status = parseStatus(
             document.select(".post-content_item:has(.summary-heading h5:contains(Status)) .summary-content")
-                .text(),
+                .text()
         )
 
         val studioItem = document.select(".post-content_item").firstOrNull { item ->
@@ -227,7 +223,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         }
     }
 
-    // ==    // ============================ VIDEO LINKS ============================
+    // ============================ VIDEO LINKS ============================
 
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
@@ -253,8 +249,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
 
             val shortName = fullName.replace("LECTEUR", "", ignoreCase = true).trim()
-
-            // Fausse URL utilisée pour afficher les statuts sans faire crasher l'application
             val dummyUrl = "http://fake.com/video.mp4"
 
             try {
@@ -291,10 +285,10 @@ class VoirAnime : ParsedAnimeHttpSource() {
                     }
                 }
             } catch (e: Exception) {
-                // Si l'erreur n'a pas de texte descriptif (ex: NullPointerException),
-                // on affiche le vrai nom technique de l'erreur.
-                val errorMsg = if (!e.message.isNullOrBlank()) {
-                    e.message?.take(40)
+                val errorMsg = if (e is NullPointerException) {
+                    "Bloqué par Cloudflare / Lien mort"
+                } else if (!e.message.isNullOrBlank()) {
+                    e.message?.take(30)
                 } else {
                     e.javaClass.simpleName
                 }
@@ -302,9 +296,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
         }
 
-        // --- TRI INTELLIGENT ---
-        // Place les vraies vidéos en premier (celles qui n'ont pas l'URL "fake.com")
-        // Repousse tous les statuts d'erreur / ignorés à la fin du menu de qualités.
         return videos.sortedByDescending { !it.url.contains("fake.com") }
     }
 
