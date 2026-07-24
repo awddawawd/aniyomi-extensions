@@ -11,8 +11,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-
-// TES IMPORTS EXACTS
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.streamhideextractor.StreamhideExtractor
 import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
