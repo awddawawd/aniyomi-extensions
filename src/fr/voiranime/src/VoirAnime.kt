@@ -322,11 +322,3 @@ class VoirAnime : ParsedAnimeHttpSource() {
     override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
     override fun videoFromElement(element: Element): Video = throw UnsupportedOperationException("Not used")
 }
-
-// ============================ FACTORY ============================
-class VoirAnimeFactory : AnimeSourceFactory {
-    override fun createSources(): List<AnimeSource> = listOf(
-        VoirAnime(),
-        VoirAnimeVF()
-    )
-}
