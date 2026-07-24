@@ -308,7 +308,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
         // On trie la liste pour que les vraies vidéos extraites apparaissent TOUJOURS en haut,
         // et les liens de secours (qui contiennent "http" dans leur nom) soient poussés tout en bas.
-        return videos.sortedBy { it.name.contains("http", ignoreCase = true) }
+        return videos.sortedBy { it.quality.contains("http", ignoreCase = true) }
     }
 
 
