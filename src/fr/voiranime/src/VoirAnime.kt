@@ -9,14 +9,13 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
+import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.streamhidevidextractor.StreamHideVidExtractor
+import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
+import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
+import eu.kanade.tachiyomi.lib.youruploadextractor.YourUploadExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
-import eu.kanade.tachiyomi.lib.streamhideextractor.StreamhideExtractor
-import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
-import eu.kanade.tachiyomi.lib.voe.VoeExtractor
-import eu.kanade.tachiyomi.lib.youruploadextractor.YourUploadExtractor
-
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
@@ -86,7 +85,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         
         val animes = document.select(popularAnimeSelector())
             .map { popularAnimeFromElement(it) }
-            .filter { !it.title.contains("(VF)", ignoreCase = true) }
+            .filter { !it.title.contains("(VF)", ignoreCase = true) } // Exclut la VF
 
         val hasNextPage = popularAnimeNextPageSelector()?.let { selector ->
             document.select(selector).first() != null
@@ -158,7 +157,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
         val document = Jsoup.parse(cleanHtml)
         val animes = document.select(searchAnimeSelector())
             .map { searchAnimeFromElement(it) }
-            .filter { !it.title.contains("(VF)", ignoreCase = true) }
+            .filter { !it.title.contains("(VF)", ignoreCase = true) } // Exclut la VF
         return AnimesPage(animes, false)
     }
 
@@ -285,8 +284,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
                         else videos.addAll(extracted)
                     }
                     iframeSrc.contains("streamhide", ignoreCase = true) || fullName.contains("SB", ignoreCase = true) -> {
-                        // Utilisation du bon extracteur Streamhide que tu as importé
-                        val extracted = StreamhideExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
+                        val extracted = StreamHideVidExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
                         if (extracted.isEmpty()) videos.add(Video(dummyUrl, "$shortName - Aucun lien", dummyUrl))
                         else videos.addAll(extracted)
                     }
@@ -295,7 +293,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
                         if (extracted.isEmpty()) videos.add(Video(dummyUrl, "$shortName - Aucun lien", dummyUrl))
                         else videos.addAll(extracted)
                     }
-                    // Ignoré car pas de librairie : myTV (Vidmoly) et FHD1 (Mail.ru)
                     iframeSrc.contains("vidmoly", ignoreCase = true) || fullName.contains("myTV", ignoreCase = true) -> {
                         videos.add(Video(dummyUrl, "$shortName - Ignoré (Pas de lecteur myTV)", dummyUrl))
                     }
@@ -330,6 +327,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
 class VoirAnimeFactory : AnimeSourceFactory {
     override fun createSources(): List<AnimeSource> = listOf(
         VoirAnime(),
-        VoirAnimeVF() // Assure-toi que VoirAnimeVF.kt a bien les mêmes imports / dépendances !
+        VoirAnimeVF()
     )
 }
