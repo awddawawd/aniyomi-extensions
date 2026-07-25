@@ -8,8 +8,11 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
+import eu.kanade.tachiyomi.lib.streamhidevidextractor.StreamHideVidExtractor
 import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
+import eu.kanade.tachiyomi.lib.vidmolyextractor.VidmolyExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
+import eu.kanade.tachiyomi.lib.youruploadextractor.YourUploadExtractor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import okhttp3.FormBody
@@ -83,6 +86,20 @@ class VoirAnimeVF : ParsedAnimeHttpSource() {
             }
         }
         return GET(url, headers)
+    }
+
+    override fun popularAnimeParse(response: Response): AnimesPage {
+        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+
+        val animes = document.select(popularAnimeSelector())
+            .map { popularAnimeFromElement(it) }
+            // Aucun filtre supplémentaire : le filtre dubbed de l'URL suffit
+
+        val hasNextPage = popularAnimeNextPageSelector()?.let { selector ->
+            document.select(selector).first() != null
+        } ?: false
+
+        return AnimesPage(animes, hasNextPage)
     }
 
     override fun popularAnimeSelector(): String = ".page-item-detail"
@@ -256,54 +273,61 @@ class VoirAnimeVF : ParsedAnimeHttpSource() {
             }
 
             val shortName = fullName.replace("LECTEUR", "", ignoreCase = true).trim()
-            val dummyUrl = "http://fake.com/video.mp4"
+
+            // Fallback : lien cliquable/lisible au lieu d’une erreur
+            val fallbackVideo = Video(iframeSrc, "$shortName - $iframeSrc", iframeSrc)
 
             try {
                 when {
+                    iframeSrc.contains("vidmoly", ignoreCase = true) || fullName.contains("Vidmoly", ignoreCase = true) -> {
+                        val extracted = VidmolyExtractor(client).videosFromUrl(iframeSrc, quality = "$shortName - Vidmoly")
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
+                    }
                     iframeSrc.contains("voe", ignoreCase = true) -> {
                         val extracted = VoeExtractor(client).videosFromUrl(iframeSrc)
                         if (extracted.isEmpty()) {
-                            videos.add(Video(dummyUrl, "$shortName - Aucun lien trouvé (Fichier supprimé ?)", dummyUrl))
-                        } else {
-                            videos.addAll(extracted)
-                        }
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     iframeSrc.contains("streamtape", ignoreCase = true) || iframeSrc.contains("stape", ignoreCase = true) -> {
                         val extracted = StreamTapeExtractor(client).videosFromUrl(iframeSrc)
                         if (extracted.isEmpty()) {
-                            videos.add(Video(dummyUrl, "$shortName - Aucun lien trouvé", dummyUrl))
-                        } else {
-                            videos.addAll(extracted)
-                        }
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
-                    iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) -> {
+                    iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) || iframeSrc.contains("weneverbeenfree", ignoreCase = true) -> {
                         val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ", headers = headers)
                         if (extracted.isEmpty()) {
-                            videos.add(Video(dummyUrl, "$shortName - Aucun lien trouvé", dummyUrl))
-                        } else {
-                            videos.addAll(extracted)
-                        }
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
-                    iframeSrc.contains("vidmoly", ignoreCase = true) -> {
-                        videos.add(Video(dummyUrl, "$shortName - Ignoré (Pas de librairie Vidmoly)", dummyUrl))
+                    iframeSrc.contains("streamhide", ignoreCase = true) || fullName.contains("SB", ignoreCase = true) -> {
+                        val extracted = StreamHideVidExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
+                    }
+                    iframeSrc.contains("yourupload", ignoreCase = true) || fullName.contains("YU", ignoreCase = true) -> {
+                        val extracted = YourUploadExtractor(client).videoFromUrl(iframeSrc, headers = headers)
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     else -> {
-                        videos.add(Video(dummyUrl, "$shortName - Lecteur inconnu/Non supporté", dummyUrl))
+                        // Pour myTV, FHD1, ou tout autre lecteur sans extracteur
+                        videos.add(fallbackVideo)
                     }
                 }
             } catch (e: Exception) {
-                val errorMsg = if (e is NullPointerException) {
-                    "Bloqué par Cloudflare / Lien mort"
-                } else if (!e.message.isNullOrBlank()) {
-                    e.message?.take(30)
-                } else {
-                    e.javaClass.simpleName
-                }
-                videos.add(Video(dummyUrl, "$shortName - Erreur: $errorMsg", dummyUrl))
+                // En cas d'erreur réseau ou blocage Cloudflare
+                videos.add(fallbackVideo)
             }
         }
 
-        return videos.sortedByDescending { !it.url.contains("fake.com") }
+        // Tri : les vraies vidéos extraites en haut, les liens de secours en bas
+        return videos.sortedBy { it.quality.contains("http", ignoreCase = true) }
     }
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
