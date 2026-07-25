@@ -93,7 +93,7 @@ class VoirAnimeVF : ParsedAnimeHttpSource() {
 
         val animes = document.select(popularAnimeSelector())
             .map { popularAnimeFromElement(it) }
-            // Aucun filtre supplémentaire : le filtre dubbed de l'URL suffit
+        // Aucun filtre supplémentaire : le filtre dubbed de l'URL suffit
 
         val hasNextPage = popularAnimeNextPageSelector()?.let { selector ->
             document.select(selector).first() != null
