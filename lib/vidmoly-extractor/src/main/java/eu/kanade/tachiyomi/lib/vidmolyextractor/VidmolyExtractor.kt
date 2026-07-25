@@ -6,43 +6,32 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
 
-class VidMolyExtractor(private val client: OkHttpClient) {
-
-    fun videoFromUrl(
-        url: String,
-        quality: String = "HLS",
-        subtitleList: List<Track> = emptyList()
-    ): Video? {
-        // Ensure we have the embed URL format
-        val embedUrl = if (url.contains("/embed-")) url else {
-            // If given a page like https://vidmoly.biz/xxx, we might need to construct embed
-            // But we'll assume the input is the embed URL already.
-            url
+class VidmolyExtractor(private val client: OkHttpClient) {
+    fun videoFromUrl(url: String, quality: String = "Vidmoly", subtitleList: List<Track> = emptyList()): Video? {
+        val document = try {
+            client.newCall(GET(url)).execute().asJsoup()
+        } catch (_: Exception) {
+            return null
         }
 
-        // Fetch the page
-        val document = client.newCall(GET(embedUrl)).execute().asJsoup()
-
-        // Find the script containing JWPlayer setup
-        // Look for: sources: [{ file: '...' }]
-        val scriptWithSources = document.selectFirst("script:containsData(sources:)")
-            ?.data()
+        // Find the script tag containing the player configuration
+        val scriptData = document.selectFirst("script:containsData(sources:)")?.data() 
             ?: return null
 
-        // Extract the file URL using regex
-        val pattern = Regex("""sources:\s*\[\s*\{\s*file:\s*['"]([^'"]+)['"]\s*\}""")
-        val match = pattern.find(scriptWithSources)
-        val videoUrl = match?.groupValues?.get(1) ?: return null
+        // Primary regex matching the sources array directly
+        var videoUrl = Regex("""sources:\s*\[\s*\{\s*file:\s*['"]([^'"]+)['"]""").find(scriptData)?.groupValues?.get(1)
 
-        // The URL may be relative? It is absolute in our case.
+        // Fallback regex looking directly for a master.m3u8 or video file URL 
+        if (videoUrl == null) {
+            videoUrl = Regex("""file:\s*['"](https?://[^'"]+\.(?:m3u8|mp4)[^'"]*)['"]""").find(scriptData)?.groupValues?.get(1)
+        }
+
+        if (videoUrl == null) return null
+
         return Video(videoUrl, quality, videoUrl, subtitleTracks = subtitleList)
     }
 
-    fun videosFromUrl(
-        url: String,
-        quality: String = "HLS",
-        subtitleList: List<Track> = emptyList()
-    ): List<Video> {
+    fun videosFromUrl(url: String, quality: String = "Vidmoly", subtitleList: List<Track> = emptyList()): List<Video> {
         return videoFromUrl(url, quality, subtitleList)?.let(::listOf).orEmpty()
     }
 }
