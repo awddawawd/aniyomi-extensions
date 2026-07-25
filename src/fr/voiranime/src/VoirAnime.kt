@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.lib.filemoonextractor.FilemoonExtractor
 import eu.kanade.tachiyomi.lib.streamhidevidextractor.StreamHideVidExtractor
 import eu.kanade.tachiyomi.lib.streamtapeextractor.StreamTapeExtractor
+import eu.kanade.tachiyomi.lib.vidmolyextractor.VidmolyExtractor
 import eu.kanade.tachiyomi.lib.voeextractor.VoeExtractor
 import eu.kanade.tachiyomi.lib.youruploadextractor.YourUploadExtractor
 import eu.kanade.tachiyomi.network.GET
@@ -245,6 +246,14 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
     // ============================ VIDEO LINKS ============================
 
+    // Lazy initialisation of extractors
+    private val voeExtractor by lazy { VoeExtractor(client) }
+    private val streamTapeExtractor by lazy { StreamTapeExtractor(client) }
+    private val filemoonExtractor by lazy { FilemoonExtractor(client) }
+    private val streamHideVidExtractor by lazy { StreamHideVidExtractor(client) }
+    private val yourUploadExtractor by lazy { YourUploadExtractor(client) }
+    private val vidmolyExtractor by lazy { VidmolyExtractor(client) }
+
     override fun videoListParse(response: Response): List<Video> {
         val body = response.body.string()
 
@@ -270,54 +279,47 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
             val shortName = fullName.replace("LECTEUR", "", ignoreCase = true).trim()
 
-            // La vidéo de secours : affiche le lien cliquable/lisible au lieu de l'erreur
+            // Fallback video (raw link) in case extraction fails
             val fallbackVideo = Video(iframeSrc, "$shortName - $iframeSrc", iframeSrc)
 
             try {
                 when {
                     iframeSrc.contains("voe", ignoreCase = true) -> {
-                        val extracted = VoeExtractor(client).videosFromUrl(iframeSrc)
-                        if (extracted.isEmpty()) {
-                            videos.add(fallbackVideo)
-                        } else videos.addAll(extracted)
+                        val extracted = voeExtractor.videosFromUrl(iframeSrc)
+                        if (extracted.isEmpty()) videos.add(fallbackVideo) else videos.addAll(extracted)
                     }
                     iframeSrc.contains("streamtape", ignoreCase = true) || iframeSrc.contains("stape", ignoreCase = true) -> {
-                        val extracted = StreamTapeExtractor(client).videosFromUrl(iframeSrc)
-                        if (extracted.isEmpty()) {
-                            videos.add(fallbackVideo)
-                        } else videos.addAll(extracted)
+                        val extracted = streamTapeExtractor.videosFromUrl(iframeSrc)
+                        if (extracted.isEmpty()) videos.add(fallbackVideo) else videos.addAll(extracted)
                     }
                     iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) || iframeSrc.contains("weneverbeenfree", ignoreCase = true) -> {
-                        val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ", headers = headers)
-                        if (extracted.isEmpty()) {
-                            videos.add(fallbackVideo)
-                        } else videos.addAll(extracted)
+                        val extracted = filemoonExtractor.videosFromUrl(iframeSrc, prefix = "$shortName - ", headers = headers)
+                        if (extracted.isEmpty()) videos.add(fallbackVideo) else videos.addAll(extracted)
                     }
                     iframeSrc.contains("streamhide", ignoreCase = true) || fullName.contains("SB", ignoreCase = true) -> {
-                        val extracted = StreamHideVidExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
-                        if (extracted.isEmpty()) {
-                            videos.add(fallbackVideo)
-                        } else videos.addAll(extracted)
+                        val extracted = streamHideVidExtractor.videosFromUrl(iframeSrc, prefix = "$shortName - ")
+                        if (extracted.isEmpty()) videos.add(fallbackVideo) else videos.addAll(extracted)
                     }
                     iframeSrc.contains("yourupload", ignoreCase = true) || fullName.contains("YU", ignoreCase = true) -> {
-                        val extracted = YourUploadExtractor(client).videoFromUrl(iframeSrc, headers = headers)
-                        if (extracted.isEmpty()) {
-                            videos.add(fallbackVideo)
-                        } else videos.addAll(extracted)
+                        val extracted = yourUploadExtractor.videoFromUrl(iframeSrc, headers = headers)
+                        if (extracted.isEmpty()) videos.add(fallbackVideo) else videos.addAll(extracted)
+                    }
+                    // New VidMoly integration
+                    iframeSrc.contains("vidmoly", ignoreCase = true) -> {
+                        val extracted = vidmolyExtractor.videosFromUrl(iframeSrc)
+                        if (extracted.isEmpty()) videos.add(fallbackVideo) else videos.addAll(extracted)
                     }
                     else -> {
-                        // Pour myTV, FHD1, ou tout autre lecteur sans extracteur
                         videos.add(fallbackVideo)
                     }
                 }
             } catch (e: Exception) {
-                // En cas d'erreur réseau ou blocage Cloudflare
+                // In case of network error or Cloudflare block, add the fallback link
                 videos.add(fallbackVideo)
             }
         }
 
-        // On trie la liste pour que les vraies vidéos extraites apparaissent TOUJOURS en haut,
-        // et les liens de secours (qui contiennent "http" dans leur nom) soient poussés tout en bas.
+        // Sort so that extracted videos (real qualities) appear before fallback raw links
         return videos.sortedBy { it.quality.contains("http", ignoreCase = true) }
     }
 

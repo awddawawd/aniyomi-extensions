@@ -13,4 +13,5 @@ dependencies {
     implementation(project(":lib:streamhidevid-extractor"))
     implementation(project(":lib:yourupload-extractor"))
     implementation(project(":lib:filemoon-extractor"))
+    implementation(project(":lib:vidmoly-extractor"))
 }
