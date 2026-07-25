@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.animeextension.fr.voiranime
 
-import eu.kanade.tachiyomi.animesource.AnimeSource
-import eu.kanade.tachiyomi.animesource.AnimeSourceFactory
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -46,17 +44,18 @@ class VoirAnime : ParsedAnimeHttpSource() {
             "Adventure" to 1642, "Romance" to 1624, "Sci-Fi" to 1277, "Slice of Life" to 1219,
             "Ecchi" to 656, "Mystery" to 624, "Mecha" to 427, "Sports" to 384,
             "Music" to 274, "Horror" to 249, "Thriller" to 180, "Mahou Shoujo" to 178,
-            "Supernatural" to 131, "Chinese" to 48, "Cartoon" to 10
+            "Supernatural" to 131, "Chinese" to 48, "Cartoon" to 10,
         ).sortedByDescending { it.second }.map { it.first }
     }
 
     private class GenreFilter(genres: List<String>) : AnimeFilter.Select<String>(
-        "Genre", genres.toTypedArray()
+        "Genre",
+        genres.toTypedArray(),
     )
 
     override fun getFilterList(): AnimeFilterList = AnimeFilterList(
         AnimeFilter.Header("Choisissez un genre (du plus populaire au moins populaire)"),
-        GenreFilter(genres)
+        GenreFilter(genres),
     )
 
     // ============================== POPULAR ==============================
@@ -71,18 +70,24 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
         val url = if (selectedGenre != null) {
             val slug = selectedGenre.lowercase().replace(" ", "-")
-            if (page == 1) "$baseUrl/anime-genre/$slug/?filter=subbed"
-            else "$baseUrl/anime-genre/$slug/page/$page/?filter=subbed"
+            if (page == 1) {
+                "$baseUrl/anime-genre/$slug/?filter=subbed"
+            } else {
+                "$baseUrl/anime-genre/$slug/page/$page/?filter=subbed"
+            }
         } else {
-            if (page == 1) "$baseUrl/?filter=subbed"
-            else "$baseUrl/page/$page/?filter=subbed"
+            if (page == 1) {
+                "$baseUrl/?filter=subbed"
+            } else {
+                "$baseUrl/page/$page/?filter=subbed"
+            }
         }
         return GET(url, headers)
     }
 
     override fun popularAnimeParse(response: Response): AnimesPage {
         val document = Jsoup.parse(response.body.string(), response.request.url.toString())
-        
+
         val animes = document.select(popularAnimeSelector())
             .map { popularAnimeFromElement(it) }
             .filter { !it.title.contains("(VF)", ignoreCase = true) } // Exclut la VF
@@ -193,7 +198,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
 
         status = parseStatus(
             document.select(".post-content_item:has(.summary-heading h5:contains(Status)) .summary-content")
-                .text()
+                .text(),
         )
 
         val studioItem = document.select(".post-content_item").firstOrNull { item ->
@@ -264,7 +269,7 @@ class VoirAnime : ParsedAnimeHttpSource() {
             }
 
             val shortName = fullName.replace("LECTEUR", "", ignoreCase = true).trim()
-            
+
             // La vidéo de secours : affiche le lien cliquable/lisible au lieu de l'erreur
             val fallbackVideo = Video(iframeSrc, "$shortName - $iframeSrc", iframeSrc)
 
@@ -272,28 +277,33 @@ class VoirAnime : ParsedAnimeHttpSource() {
                 when {
                     iframeSrc.contains("voe", ignoreCase = true) -> {
                         val extracted = VoeExtractor(client).videosFromUrl(iframeSrc)
-                        if (extracted.isEmpty()) videos.add(fallbackVideo)
-                        else videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     iframeSrc.contains("streamtape", ignoreCase = true) || iframeSrc.contains("stape", ignoreCase = true) -> {
                         val extracted = StreamTapeExtractor(client).videosFromUrl(iframeSrc)
-                        if (extracted.isEmpty()) videos.add(fallbackVideo)
-                        else videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     iframeSrc.contains("moon", ignoreCase = true) || fullName.contains("MOON", ignoreCase = true) || iframeSrc.contains("weneverbeenfree", ignoreCase = true) -> {
                         val extracted = FilemoonExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ", headers = headers)
-                        if (extracted.isEmpty()) videos.add(fallbackVideo)
-                        else videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     iframeSrc.contains("streamhide", ignoreCase = true) || fullName.contains("SB", ignoreCase = true) -> {
                         val extracted = StreamHideVidExtractor(client).videosFromUrl(iframeSrc, prefix = "$shortName - ")
-                        if (extracted.isEmpty()) videos.add(fallbackVideo)
-                        else videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     iframeSrc.contains("yourupload", ignoreCase = true) || fullName.contains("YU", ignoreCase = true) -> {
                         val extracted = YourUploadExtractor(client).videoFromUrl(iframeSrc, headers = headers)
-                        if (extracted.isEmpty()) videos.add(fallbackVideo)
-                        else videos.addAll(extracted)
+                        if (extracted.isEmpty()) {
+                            videos.add(fallbackVideo)
+                        } else videos.addAll(extracted)
                     }
                     else -> {
                         // Pour myTV, FHD1, ou tout autre lecteur sans extracteur
@@ -310,7 +320,6 @@ class VoirAnime : ParsedAnimeHttpSource() {
         // et les liens de secours (qui contiennent "http" dans leur nom) soient poussés tout en bas.
         return videos.sortedBy { it.quality.contains("http", ignoreCase = true) }
     }
-
 
     override fun videoUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
     override fun videoListSelector(): String = throw UnsupportedOperationException("Not used")
