@@ -10,3 +10,5 @@ repo/
 apk/
 gen
 generated-src/
+__pycache__/
+*.pyc
