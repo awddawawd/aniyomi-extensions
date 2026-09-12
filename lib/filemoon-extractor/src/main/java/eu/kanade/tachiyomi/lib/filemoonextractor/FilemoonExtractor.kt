@@ -130,7 +130,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             ).execute()
             val attestJson = json.parseToJsonElement(attestRes.body?.string() ?: return emptyList()).jsonObject
             val attestToken = attestJson["token"]?.jsonPrimitive?.content ?: return emptyList()
-            val confidence = attestJson["confidence"]?.jsonPrimitive?.double ?: 0.95
+            val confidence = attestJson["confidence"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.95
             val viewerId = attestRes.header("Set-Cookie")?.let { extractCookie(it, "byse_viewer_id") } ?: ""
             val deviceId = attestRes.header("Set-Cookie")?.let { extractCookie(it, "byse_device_id") } ?: ""
 
@@ -153,7 +153,7 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             ).execute()
             val captchaJson = json.parseToJsonElement(captchaRes.body?.string() ?: return emptyList()).jsonObject
             val powNonce = captchaJson["pow_nonce"]?.jsonPrimitive?.content ?: return emptyList()
-            val powDifficulty = captchaJson["pow_difficulty"]?.jsonPrimitive?.int ?: return emptyList()
+            val powDifficulty = captchaJson["pow_difficulty"]?.jsonPrimitive?.content?.toIntOrNull() ?: return emptyList()
             val powToken = captchaJson["pow_token"]?.jsonPrimitive?.content ?: return emptyList()
 
             // 5. Solve proof-of-work
@@ -213,8 +213,21 @@ class FilemoonExtractor(private val client: OkHttpClient) {
             ?.substringAfter("$name=")
     }
 
+    private fun anyToJson(obj: Any?): String {
+        return when (obj) {
+            null -> "null"
+            is String -> "\"${obj.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+            is Number, is Boolean -> obj.toString()
+            is Map<*, *> -> obj.entries.joinToString(prefix = "{", postfix = "}") { (k, v) ->
+                "\"${k.toString().replace("\"", "\\\"")}\":${anyToJson(v)}"
+            }
+            is Iterable<*> -> obj.joinToString(prefix = "[", postfix = "]") { anyToJson(it) }
+            else -> "\"${obj.toString().replace("\"", "\\\"")}\""
+        }
+    }
+
     private fun Any.toJsonRequestBody() =
-        json.encodeToString(this).toRequestBody("application/json".toMediaType())
+        anyToJson(this).toRequestBody("application/json".toMediaType())
 
     private fun String.base64UrlDecode(): ByteArray =
         Base64.decode(this, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
