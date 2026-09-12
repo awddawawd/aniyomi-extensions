@@ -11,8 +11,8 @@ VERSION_STR = "VersionCode ="
 VERSION_REGEX = re.compile(f"{VERSION_STR} (\\d+)")
 BUMPED_FILES: list[Path] = []
 
-BOT_EMAIL = "aniyomi-bot@aniyomi.org"
-BOT_NAME = "aniyomi-bot[bot]"
+BOT_EMAIL = "github-actions[bot]@users.noreply.github.com"
+BOT_NAME = "github-actions[bot]"
 
 def has_match(query: str, file: Path) -> tuple[Path, bool]:
     return (file, query in file.read_text())
@@ -50,12 +50,15 @@ def bump_lib_multisrc(theme: str):
         bump_version(file)
 
 def commit_changes():
-    paths = [str(path.resolve()) for path in BUMPED_FILES]
-    subprocess.check_call(["git", "config", "--local", "user.email", BOT_EMAIL])
-    subprocess.check_call(["git", "config", "--local", "user.name", BOT_NAME])
-    subprocess.check_call(["git", "add"] + paths)
-    subprocess.check_call(["git", "commit", "-S", "-m", "[skip ci] chore: Mass-bump on extensions"])
-    subprocess.check_call(["git", "push"])
+    try:
+        paths = [str(path.resolve()) for path in BUMPED_FILES]
+        subprocess.check_call(["git", "config", "--local", "user.email", BOT_EMAIL])
+        subprocess.check_call(["git", "config", "--local", "user.name", BOT_NAME])
+        subprocess.check_call(["git", "add"] + paths)
+        subprocess.check_call(["git", "commit", "-m", "[skip ci] chore: Mass-bump on extensions"])
+        subprocess.check_call(["git", "push", "origin", "HEAD:master"])
+    except Exception as e:
+        print(f"Warning: commit_changes failed: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
