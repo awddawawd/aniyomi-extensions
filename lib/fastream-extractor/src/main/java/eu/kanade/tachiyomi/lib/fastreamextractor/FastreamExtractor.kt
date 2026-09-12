@@ -9,9 +9,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import okhttp3.internal.commonEmptyHeaders
-
-class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
+class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = Headers.Builder().build()) {
     private val videoHeaders by lazy {
         headers.newBuilder()
             .set("Referer", "$FASTREAM_URL/")

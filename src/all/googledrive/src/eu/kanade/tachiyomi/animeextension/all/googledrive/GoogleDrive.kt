@@ -31,7 +31,6 @@ import okhttp3.ProtocolException
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.internal.commonEmptyRequestBody
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -226,7 +225,7 @@ class GoogleDrive : ConfigurableAnimeSource, AnimeHttpSource() {
             val newPostUrl = "https://drive.usercontent.google.com/uc?id=${it.id}&authuser=0&export=download"
 
             val newResponse = client.newCall(
-                POST(newPostUrl, headers = newPostHeaders, body = commonEmptyRequestBody),
+                POST(newPostUrl, headers = newPostHeaders, body = "".toRequestBody()),
             ).execute().parseAs<DownloadResponse> { JSON_REGEX.find(it)!!.groupValues[1] }
 
             val downloadHeaders = headers.newBuilder().apply {
