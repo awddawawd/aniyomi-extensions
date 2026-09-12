@@ -103,6 +103,11 @@ jobs:
             echo "ALIAS=${SECRET_ALIAS:-aniyomi}" >> $GITHUB_ENV
             echo "KEY_STORE_PASSWORD=${SECRET_KEY_STORE_PASSWORD:-android}" >> $GITHUB_ENV
             echo "KEY_PASSWORD=${SECRET_KEY_PASSWORD:-android}" >> $GITHUB_ENV
+          elif [ -f ".signingkey.jks" ]; then
+            cp .signingkey.jks signingkey.jks
+            echo "ALIAS=aniyomi" >> $GITHUB_ENV
+            echo "KEY_STORE_PASSWORD=android" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
           else
             keytool -genkey -v -keystore signingkey.jks -alias aniyomi -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Aniyomi, OU=Aniyomi, O=Aniyomi, L=Unknown, S=Unknown, C=US"
             echo "ALIAS=aniyomi" >> $GITHUB_ENV

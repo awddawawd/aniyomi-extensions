@@ -106,3 +106,54 @@ with (REPO_DIR / "index.json").open("w", encoding="utf-8") as f:
 
 with (REPO_DIR / "index.min.json").open("w", encoding="utf-8") as f:
     json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
+
+def get_signing_key_fingerprint(apk_path: Path) -> str:
+    try:
+        out = subprocess.check_output(["keytool", "-printcert", "-jarfile", str(apk_path)]).decode()
+        for line in out.splitlines():
+            if "SHA256:" in line or "SHA-256:" in line:
+                return line.split(":", 1)[1].strip().replace(":", "").lower()
+    except Exception:
+        pass
+    try:
+        from cryptography.hazmat.primitives.serialization import pkcs7
+        from cryptography.hazmat.primitives import hashes
+        with ZipFile(apk_path) as z:
+            for n in z.namelist():
+                if n.startswith("META-INF/") and (n.endswith(".RSA") or n.endswith(".DSA") or n.endswith(".EC")):
+                    certs = pkcs7.load_der_pkcs7_certificates(z.read(n))
+                    if certs:
+                        return certs[0].fingerprint(hashes.SHA256()).hex().lower()
+    except Exception:
+        pass
+    return "2b7a66f6dfe50ffc78d628fccad9d5c288953fc9ffc6fcac87fe4b8e1f47a13a"
+
+all_apks = list(REPO_APK_DIR.glob("*.apk"))
+first_apk = all_apks[0] if all_apks else None
+fingerprint = get_signing_key_fingerprint(first_apk) if first_apk else "2b7a66f6dfe50ffc78d628fccad9d5c288953fc9ffc6fcac87fe4b8e1f47a13a"
+print(f"Repository signing key fingerprint: {fingerprint}")
+
+repo_name = "VoirAnime"
+repo_website = f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'awddawawd/aniyomi-extensions')}"
+
+repo_meta = {
+    "meta": {
+        "name": repo_name,
+        "shortName": repo_name,
+        "website": repo_website,
+        "signingKeyFingerprint": fingerprint,
+    }
+}
+
+with (REPO_DIR / "repo.json").open("w", encoding="utf-8") as f:
+    json.dump(repo_meta, f, ensure_ascii=False, indent=2)
+
+import html
+with (REPO_DIR / "index.html").open("w", encoding="utf-8") as f:
+    f.write('<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>VoirAnime Extensions</title>\n</head>\n<body>\n<pre>\n')
+    for entry in index_min_data:
+        apk_escaped = 'apk/' + html.escape(entry["apk"])
+        name_escaped = html.escape(entry["name"])
+        f.write(f'<a href="{apk_escaped}">{name_escaped}</a>\n')
+    f.write('</pre>\n</body>\n</html>\n')
+
