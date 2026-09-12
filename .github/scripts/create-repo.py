@@ -15,7 +15,7 @@ APPLICATION_ICON_320_REGEX = re.compile(
 )
 LANGUAGE_REGEX = re.compile(r"aniyomi-([^\.]+)")
 
-*_, ANDROID_BUILD_TOOLS = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
+ANDROID_BUILD_TOOLS = sorted((Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir())[-1]
 REPO_DIR = Path("repo")
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_ICON_DIR = REPO_DIR / "icon"

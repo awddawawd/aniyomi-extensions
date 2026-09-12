@@ -59,16 +59,24 @@ android {
 
     signingConfigs {
         release {
-            storeFile rootProject.file("signingkey.jks")
-            storePassword System.getenv("KEY_STORE_PASSWORD")
-            keyAlias System.getenv("ALIAS")
-            keyPassword System.getenv("KEY_PASSWORD")
+            File keyFile = rootProject.file("signingkey.jks")
+            if (keyFile.exists()) {
+                storeFile keyFile
+                storePassword System.getenv("KEY_STORE_PASSWORD") ?: "android"
+                keyAlias System.getenv("ALIAS") ?: "androiddebugkey"
+                keyPassword System.getenv("KEY_PASSWORD") ?: "android"
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            File keyFile = rootProject.file("signingkey.jks")
+            if (keyFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled false
         }
     }
