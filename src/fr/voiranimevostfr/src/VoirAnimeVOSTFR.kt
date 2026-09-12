@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.animeextension.fr.voiranime
+package eu.kanade.tachiyomi.animeextension.fr.voiranimevostfr
 
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
